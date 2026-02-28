@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://listacerta:listacerta@host.docker.internal:5432/productfinder
+      PORT: 3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./vpn:/app/vpn:ro
+      - vpn-logs:/var/log/vpn
+      - /dev/net:/dev/net
+    cap_add:
+      - NET_ADMIN
+    command: >
+      sh -c "mkdir -p /dev/net && mknod /dev/net/tun c 10 200 2>/dev/null || true &&
+             chmod 666 /dev/net/tun &&
+             echo '=== Starting VPN ===' &&
+             # Use pull-filter to ignore redirect-gateway (don't route everything through VPN)
+             openvpn --config /app/vpn/client.ovpn --auth-user-pass /app/vpn/credentials.txt --pull-filter ignore redirect-gateway --log /var/log/vpn/vpn.log --daemon &&
+             sleep 8 &&
+             cat /var/log/vpn/vpn.log | tail -5 &&
+             # Now add ONLY Continente IP through VPN
+             echo '=== Adding Continente route ===' &&
+             ip route add 31.214.0.0/16 via 10.243.0.1 2>/dev/null || true &&
+             ip route add 185.60.0.0/16 via 10.243.0.1 2>/dev/null || true &&
+             ip route show &&
+             echo '=== Starting App ===' &&
+             npx prisma migrate deploy &&
+             node src/index.js"
+
+volumes:
+  vpn-logs:

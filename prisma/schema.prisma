@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  ean         String?  @unique
+  name        String
+  brand       String?
+  category    String?
+  imageUrl    String?
+  source      String   @default("continente")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  prices      Price[]
+
+  @@index([ean])
+  @@index([name])
+}
+
+model Price {
+  id          String   @id @default(uuid())
+  productId   String
+  priceCents  Int
+  currency    String   @default("EUR")
+  pvpCents    Int?
+  pricePerKgCents Int?
+  capturedAt  DateTime @default(now())
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([capturedAt])
+}
+
+model ScrapeJob {
+  id          String   @id @default(uuid())
+  category    String
+  status      String   @default("pending") // pending, running, completed, failed
+  total       Int      @default(0)
+  scraped     Int      @default(0)
+  errors      Int      @default(0)
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  delayMs     Int      @default(2000)
+}
+
+model Settings {
+  id        String   @id @default("default")
+  delayMs   Int      @default(2000)
+  updatedAt DateTime @updatedAt
+}

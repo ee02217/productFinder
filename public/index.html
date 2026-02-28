@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProductFinder Admin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+    
+    .header { background: #1a1a2e; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 1.5rem; }
+    .header .status { font-size: 0.9rem; opacity: 0.8; }
+    
+    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+    
+    .card { background: white; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .card h2 { margin-bottom: 1rem; color: #333; }
+    
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+    .stat { background: #f8f9fa; padding: 1rem; border-radius: 6px; text-align: center; }
+    .stat-value { font-size: 2rem; font-weight: bold; color: #1a1a2e; }
+    .stat-label { color: #666; font-size: 0.9rem; margin-top: 0.5rem; }
+    
+    .form-row { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+    .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+    .form-group label { font-weight: 500; color: #555; }
+    .form-group select, .form-group input { padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; }
+    
+    .btn { padding: 0.6rem 1.2rem; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.9; }
+    .btn-primary { background: #4CAF50; color: white; }
+    .btn-danger { background: #f44336; color: white; }
+    .btn-secondary { background: #666; color: white; }
+    
+    .products-table { width: 100%; border-collapse: collapse; }
+    .products-table th, .products-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #eee; }
+    .products-table th { background: #f8f9fa; font-weight: 600; }
+    .products-table tr { cursor: pointer; }
+    .products-table tr:hover { background: #f0f7ff; }
+    .products-table .price { font-weight: 500; }
+    .products-table .original-price { text-decoration: line-through; color: #999; font-size: 0.9rem; }
+    
+    .pagination { display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
+    .pagination button { padding: 0.5rem 1rem; }
+    
+    .search-bar { display: flex; gap: 1rem; margin-bottom: 1rem; }
+    .search-bar input { flex: 1; padding: 0.6rem; border: 1px solid #ddd; border-radius: 4px; }
+    
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    .job-status { margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; }
+    .job-status.running { background: #fff3cd; }
+    .job-status.completed { background: #d4edda; }
+    
+    .delay-display { font-size: 2rem; font-weight: bold; color: #1a1a2e; }
+    
+    /* VPN Status */
+    .vpn-status { display: flex; align-items: center; gap: 0.5rem; }
+    .vpn-indicator { width: 10px; height: 10px; border-radius: 50%; }
+    .vpn-indicator.connected { background: #4CAF50; }
+    .vpn-indicator.disconnected { background: #f44336; }
+    .vpn-ip { font-size: 0.85rem; color: #999; }
+
+    /* Modal */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+    .modal.active { display: flex; align-items: center; justify-content: center; }
+    .modal-content { background: white; border-radius: 8px; padding: 2rem; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; }
+    .modal-header h2 { color: #1a1a2e; font-size: 1.5rem; }
+    .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666; }
+    .modal-close:hover { color: #333; }
+    
+    .product-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .product-info-item { background: #f8f9fa; padding: 0.75rem; border-radius: 4px; }
+    .product-info-item label { display: block; color: #666; font-size: 0.85rem; margin-bottom: 0.25rem; }
+    .product-info-item span { font-weight: 500; }
+    
+    .price-history { margin-top: 1.5rem; }
+    .price-history h3 { margin-bottom: 1rem; color: #333; }
+    .price-table { width: 100%; border-collapse: collapse; }
+    .price-table th, .price-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #eee; }
+    .price-table th { background: #f8f9fa; font-weight: 600; }
+    .price-table tr:hover { background: #f8f9fa; }
+    .price-table .price { font-weight: 500; color: #2e7d32; }
+    .price-table .pvp { color: #666; text-decoration: line-through; font-size: 0.9rem; }
+    .price-table .discount { color: #d32f2f; font-weight: 500; }
+    
+    .no-history { color: #666; font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🛒 ProductFinder Admin</h1>
+    <div class="vpn-status" id="vpnStatus">
+      <div class="vpn-indicator disconnected"></div>
+      <span class="vpn-ip">Checking VPN...</span>
+    </div>
+    <div class="status" id="headerStatus"></div>
+  </div>
+  
+  <div class="container">
+    <!-- Stats -->
+    <div class="card">
+      <h2>📊 Statistics</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value" id="totalProducts">-</div>
+          <div class="stat-label">Total Products</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="totalPrices">-</div>
+          <div class="stat-label">Price Records</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="lastScrape">-</div>
+          <div class="stat-label">Last Scrape</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Settings -->
+    <div class="card">
+      <h2>⚙️ Scraper Settings</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Delay between requests (ms)</label>
+          <input type="number" id="delayInput" min="500" max="10000" step="100" value="2000" style="width: 150px;">
+        </div>
+        <button class="btn btn-secondary" onclick="saveSettings()">Save Settings</button>
+        <span id="settingsSaved" style="color: green; display: none;">✓ Saved!</span>
+      </div>
+    </div>
+    
+    <!-- Scraper Controls -->
+    <div class="card">
+      <h2>🚀 Scrape Products</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="categorySelect">
+            <option value="mercearia">Mercearia</option>
+            <option value="frescos-frutas">Frescos - Frutas</option>
+            <option value="frescos-legumes">Frescos - Legumes</option>
+            <option value="frescos-talho">Frescos - Talho</option>
+            <option value="frescos-peixaria">Frescos - Peixaria</option>
+            <option value="laticinios">Laticínios e Ovos</option>
+            <option value="congelados">Congelados</option>
+            <option value="bebidas">Bebidas</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Limit (0 = all)</label>
+          <input type="number" id="limitInput" value="0" min="0" style="width: 100px;">
+        </div>
+        <button class="btn btn-primary" id="startBtn" onclick="startScraping()">Start Scraping</button>
+        <button class="btn btn-danger" id="stopBtn" onclick="stopScraping()" disabled>Stop</button>
+      </div>
+      
+      <div class="job-status" id="jobStatus" style="display: none;">
+        <div id="jobStatusText"></div>
+        <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+          Scraped: <span id="jobScraped">0</span> / <span id="jobTotal">0</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Products List -->
+    <div class="card">
+      <h2>📦 Products</h2>
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search by name, brand, or EAN...">
+        <button class="btn btn-secondary" onclick="loadProducts()">Search</button>
+      </div>
+      <table class="products-table">
+        <thead>
+          <tr>
+            <th>EAN</th>
+            <th>Name</th>
+            <th>Brand</th>
+            <th>Category</th>
+            <th>Price</th>
+            <th>Price/kg</th>
+            <th>PVP</th>
+            <th>Last Updated</th>
+          </tr>
+        </thead>
+        <tbody id="productsTable">
+          <tr><td colspan="7" style="text-align: center;">Loading...</td></tr>
+        </tbody>
+      </table>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <!-- Product Detail Modal -->
+  <div class="modal" id="productModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Product Details</h2>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+      <div class="product-info" id="productInfo"></div>
+      <div class="price-history">
+        <h3>📈 Price History</h3>
+        <table class="price-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Price</th>
+              <th>Price/kg</th>
+              <th>PVP</th>
+              <th>Discount</th>
+            </tr>
+          </thead>
+          <tbody id="priceHistoryTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+    let currentPage = 1;
+    let totalPages = 1;
+    let scraperStatus = null;
+    let statusInterval = null;
+
+    // Check VPN status
+    async function checkVpnStatus() {
+      try {
+        const res = await fetch(API + '/api/vpn/status');
+        const data = await res.json();
+        
+        const vpnStatus = document.getElementById('vpnStatus');
+        const indicator = vpnStatus.querySelector('.vpn-indicator');
+        const ipSpan = vpnStatus.querySelector('.vpn-ip');
+        
+        if (data.isConnected) {
+          indicator.className = 'vpn-indicator connected';
+          ipSpan.textContent = 'VPN: ' + data.ip;
+        } else {
+          indicator.className = 'vpn-indicator disconnected';
+          ipSpan.textContent = 'No VPN (' + data.ip + ')';
+        }
+      } catch (e) {
+        console.error('Failed to check VPN:', e);
+      }
+    }
+    let currentProductId = null;
+
+    // Load settings
+    async function loadSettings() {
+      try {
+        const res = await fetch(API + '/api/settings');
+        const settings = await res.json();
+        document.getElementById('delayInput').value = settings.delayMs;
+      } catch (e) {
+        console.error('Failed to load settings:', e);
+      }
+    }
+
+    // Save settings
+    async function saveSettings() {
+      const delayMs = parseInt(document.getElementById('delayInput').value);
+      try {
+        await fetch(API + '/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ delayMs }),
+        });
+        document.getElementById('settingsSaved').style.display = 'inline';
+        setTimeout(() => document.getElementById('settingsSaved').style.display = 'none', 2000);
+      } catch (e) {
+        alert('Failed to save settings');
+      }
+    }
+
+    // Load stats
+    async function loadStats() {
+      try {
+        const res = await fetch(API + '/api/products/meta/stats');
+        const stats = await res.json();
+        document.getElementById('totalProducts').textContent = stats.totalProducts;
+        document.getElementById('totalPrices').textContent = stats.totalPrices;
+        
+        if (stats.recentScrapes && stats.recentScrapes.length > 0) {
+          const last = stats.recentScrapes[0];
+          document.getElementById('lastScrape').textContent = 
+            last.status === 'completed' ? last.scraped + ' prods' : 'In progress';
+        }
+      } catch (e) {
+        console.error('Failed to load stats:', e);
+      }
+    }
+
+    // Load products
+    async function loadProducts(page = 1) {
+      const search = document.getElementById('searchInput').value;
+      currentPage = page;
+      
+      try {
+        const res = await fetch(API + `/api/products?page=${page}&limit=50&search=${encodeURIComponent(search)}`);
+        const data = await res.json();
+        
+        const tbody = document.getElementById('productsTable');
+        if (data.products.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No products found</td></tr>';
+        } else {
+          tbody.innerHTML = data.products.map(p => `
+            <tr onclick="showProductDetails('${p.id}')">
+              <td><code>${p.ean || '-'}</code></td>
+              <td>${p.name || '-'}</td>
+              <td>${p.brand || '-'}</td>
+              <td>${p.category || '-'}</td>
+              <td class="price">${p.currentPrice ? (p.currentPrice / 100).toFixed(2) + ' €' : '-'}</td>
+              <td class="price">${p.currentPricePerKg ? (p.currentPricePerKg / 100).toFixed(2) + ' €/kg' : '-'}</td>
+              <td>${p.currentPvp ? '<span class="original-price">' + (p.currentPvp / 100).toFixed(2) + ' €</span>' : '-'}</td>
+              <td>${new Date(p.lastUpdated).toLocaleDateString()}</td>
+            </tr>
+          `).join('');
+        }
+        
+        totalPages = data.pagination.pages;
+        renderPagination();
+      } catch (e) {
+        console.error('Failed to load products:', e);
+      }
+    }
+
+    // Show product details
+    async function showProductDetails(productId) {
+      currentProductId = productId;
+      const modal = document.getElementById('productModal');
+      
+      try {
+        const res = await fetch(API + `/api/products/${productId}`);
+        const product = await res.json();
+        
+        // Set title and info
+        document.getElementById('modalTitle').textContent = product.name || 'Product Details';
+        
+        document.getElementById('productInfo').innerHTML = `
+          <div class="product-info-item">
+            <label>EAN</label>
+            <span>${product.ean || '-'}</span>
+          </div>
+          <div class="product-info-item">
+            <label>Name</label>
+            <input type="text" id="editName" value="${(product.name || '').replace(/"/g, '&quot;')}" style="width: 100%; padding: 4px;">
+          </div>
+          <div class="product-info-item">
+            <label>Brand</label>
+            <input type="text" id="editBrand" value="${(product.brand || '').replace(/"/g, '&quot;')}" style="width: 100%; padding: 4px;">
+          </div>
+          <div class="product-info-item">
+            <label>Category</label>
+            <input type="text" id="editCategory" value="${(product.category || '').replace(/"/g, '&quot;')}" style="width: 100%; padding: 4px;">
+          </div>
+          <div class="product-info-item">
+            <label>Image URL</label>
+            <input type="text" id="editImageUrl" value="${(product.imageUrl || '').replace(/"/g, '&quot;')}" style="width: 100%; padding: 4px;">
+          </div>
+          <div class="product-info-item">
+            <label>Image Preview</label>
+            <div>${product.imageUrl && product.imageUrl.startsWith('http') ? '<img src="' + product.imageUrl + '" style="max-width: 150px; max-height: 150px; object-fit: contain; border: 1px solid #eee; border-radius: 4px;">' : '-'}</div>
+          </div>
+          <div style="grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button class="btn btn-primary" onclick="saveProduct('${product.id}')">Save Changes</button>
+            <button class="btn btn-danger" onclick="deleteProduct('${product.id}')">Delete Product</button>
+          </div>
+        `;
+        
+        // Price history
+        const tbody = document.getElementById('priceHistoryTable');
+        if (product.prices && product.prices.length > 0) {
+          tbody.innerHTML = product.prices.map(price => {
+            const priceEur = (price.priceCents / 100).toFixed(2);
+            const pricePerKgEur = price.pricePerKgCents ? (price.pricePerKgCents / 100).toFixed(2) : null;
+            const pvpEur = price.pvpCents ? (price.pvpCents / 100).toFixed(2) : null;
+            let discount = '-';
+            if (pvpEur) {
+              const discountPct = Math.round((1 - price.priceCents / price.pvpCents) * 100);
+              discount = `<span class="discount">-${discountPct}%</span>`;
+            }
+            return `
+              <tr>
+                <td>${new Date(price.capturedAt).toLocaleString()}</td>
+                <td class="price">${priceEur} €</td>
+                <td class="price">${pricePerKgEur ? pricePerKgEur + ' €/kg' : '-'}</td>
+                <td class="pvp">${pvpEur ? pvpEur + ' €' : '-'}</td>
+                <td>${discount}</td>
+                <td><button class="btn btn-danger" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;" onclick="deletePrice('${price.id}')">Delete</button></td>
+              </tr>
+            `;
+          }).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="5" class="no-history">No price history available</td></tr>';
+        }
+        
+        modal.classList.add('active');
+      } catch (e) {
+        console.error('Failed to load product details:', e);
+        alert('Failed to load product details');
+      }
+    }
+
+    // Close modal
+    function closeModal() {
+      document.getElementById('productModal').classList.remove('active');
+      currentProductId = null;
+    }
+
+    // Save product changes
+    async function saveProduct(productId) {
+      const name = document.getElementById('editName').value;
+      const brand = document.getElementById('editBrand').value;
+      const category = document.getElementById('editCategory').value;
+      const imageUrl = document.getElementById('editImageUrl').value;
+      
+      try {
+        const res = await fetch(API + '/api/products/' + productId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, brand, category, imageUrl }),
+        });
+        
+        if (res.ok) {
+          alert('Product saved!');
+          loadProducts();
+          showProductDetails(productId);
+        } else {
+          alert('Failed to save product');
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    // Delete product
+    async function deleteProduct(productId) {
+      if (!confirm('Delete this product and all its price history?')) return;
+      
+      try {
+        const res = await fetch(API + '/api/products/' + productId, {
+          method: 'DELETE',
+        });
+        
+        if (res.ok) {
+          alert('Product deleted!');
+          closeModal();
+          loadProducts();
+        } else {
+          alert('Failed to delete product');
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    // Delete price record
+    async function deletePrice(priceId) {
+      if (!confirm('Delete this price record?')) return;
+      
+      try {
+        const res = await fetch(API + '/api/products/price/' + priceId, {
+          method: 'DELETE',
+        });
+        
+        if (res.ok) {
+          // Refresh the modal
+          if (currentProductId) {
+            showProductDetails(currentProductId);
+          }
+        } else {
+          alert('Failed to delete price');
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    // Close modal on outside click
+    document.getElementById('productModal').addEventListener('click', (e) => {
+      if (e.target.id === 'productModal') closeModal();
+    });
+
+    // Render pagination
+    function renderPagination() {
+      const pg = document.getElementById('pagination');
+      let html = '';
+      
+      if (currentPage > 1) {
+        html += `<button class="btn btn-secondary" onclick="loadProducts(${currentPage - 1})">← Prev</button>`;
+      }
+      
+      html += ` <span style="padding: 0.5rem;">Page ${currentPage} of ${totalPages}</span> `;
+      
+      if (currentPage < totalPages) {
+        html += `<button class="btn btn-secondary" onclick="loadProducts(${currentPage + 1})">Next →</button>`;
+      }
+      
+      pg.innerHTML = html;
+    }
+
+    // Check scraper status
+    async function checkStatus() {
+      try {
+        const res = await fetch(API + '/api/scraper/status');
+        scraperStatus = await res.json();
+        
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const jobStatus = document.getElementById('jobStatus');
+        
+        if (scraperStatus.isScraping) {
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+          startBtn.innerHTML = '<span class="spinner"></span> Scraping...';
+          jobStatus.style.display = 'block';
+          jobStatus.className = 'job-status running';
+          
+          if (scraperStatus.currentJob) {
+            document.getElementById('jobStatusText').textContent = 
+              `Scraping ${scraperStatus.currentJob.category}...`;
+            document.getElementById('jobScraped').textContent = scraperStatus.currentJob.scraped;
+            document.getElementById('jobTotal').textContent = scraperStatus.currentJob.total || '...';
+          }
+          
+          document.getElementById('headerStatus').textContent = '🔄 Scraping in progress...';
+        } else {
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+          startBtn.textContent = 'Start Scraping';
+          jobStatus.style.display = 'none';
+          document.getElementById('headerStatus').textContent = '✓ Ready';
+        }
+      } catch (e) {
+        console.error('Failed to check status:', e);
+      }
+    }
+
+    // Start scraping
+    async function startScraping() {
+      const category = document.getElementById('categorySelect').value;
+      const limit = parseInt(document.getElementById('limitInput').value);
+      
+      try {
+        await fetch(API + '/api/scraper/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category, limit }),
+        });
+        checkStatus();
+      } catch (e) {
+        alert('Failed to start scraping');
+      }
+    }
+
+    // Stop scraping
+    async function stopScraping() {
+      try {
+        await fetch(API + '/api/scraper/stop', { method: 'POST' });
+        checkStatus();
+      } catch (e) {
+        alert('Failed to stop scraping');
+      }
+    }
+
+    // Initialize
+    loadSettings();
+    loadStats();
+    loadProducts();
+    checkStatus();
+    checkVpnStatus();
+    
+    // Poll status every 2 seconds when scraping, VPN every 30 seconds
+    statusInterval = setInterval(() => {
+      if (scraperStatus && scraperStatus.isScraping) {
+        checkStatus();
+        loadStats();
+      }
+      checkVpnStatus();
+    }, 2000);
+
+    // Search on Enter
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') loadProducts();
+    });
+  </script>
+</body>
+</html>
