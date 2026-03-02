@@ -350,38 +350,50 @@
           const select = document.getElementById('discoveredCategorySelect');
           select.innerHTML = '<option value="">Select a category...</option>';
           
-          // Group by 3-level hierarchy
-          const grouped = {};
+          // Process all categories - show full path
+          const uniquePaths = new Set();
+          
           data.categories.forEach(c => {
-            const urlParts = c.url.split('/').filter(p => p && !p.includes('www.continente.pt'));
-            const main = urlParts[0] || 'Other';
-            const sub = urlParts[1] || '';
-            const subsub = urlParts[2] || '';
+            // Extract all parts from URL properly
+            const cleanUrl = c.url.replace('https://www.continente.pt', '').replace('http://www.continente.pt', '');
+            const parts = cleanUrl.split('/').filter(p => p && p !== 'pt');
             
-            // Key is main|subsub
-            const key = main + '|' + subsub;
-            if (!grouped[key]) {
-              grouped[key] = { main, sub, subsub };
+            if (parts.length >= 2) {
+              const main = parts[0].trim();
+              const sub = parts[1] ? parts[1].trim() : '';
+              const subsub = parts[2] ? parts[2].trim() : '';
+              
+              let label = main;
+              if (sub) {
+                label += ' | ' + sub.replace(/-/g, ' ');
+              }
+              if (subsub) {
+                label += ' | ' + subsub.replace(/-/g, ' ');
+              }
+              
+              // Capitalize first letter of each word
+              label = label.replace(/\b\w/g, l => l.toUpperCase());
+              
+              const pathKey = main + '|' + sub + '|' + subsub;
+              if (!uniquePaths.has(pathKey)) {
+                uniquePaths.add(pathKey);
+                
+                const option = document.createElement('option');
+                option.value = '/' + parts.join('/') + '/';
+                option.textContent = label;
+                select.appendChild(option);
+              }
             }
           });
           
-          // Show all 3 levels in dropdown
-          Object.keys(grouped).sort().forEach(key => {
-            const g = grouped[key];
-            if (g.subsub) {
-              // Has subsub - full 3 levels
-              const option = document.createElement('option');
-              option.value = `/${g.main}/${g.sub}/${g.subsub}/`;
-              option.textContent = `${g.main} | ${g.sub.replace(/-/g, ' ')} | ${g.subsub.replace(/-/g, ' ')}`;
-              select.appendChild(option);
-            } else if (g.sub) {
-              // Has main and sub only
-              const option = document.createElement('option');
-              option.value = `/${g.main}/${g.sub}/`;
-              option.textContent = `${g.main} | ${g.sub.replace(/-/g, ' ')}`;
-              select.appendChild(option);
-            }
-          });
+          document.getElementById('discoveredCategories').style.display = 'block';
+          statusEl.textContent = `Found ${uniquePaths.size} categories!`;
+        } else {
+          statusEl.textContent = 'No categories found';
+        }
+      } catch (e) {
+        statusEl.textContent = 'Error: ' + e.message;
+      }
           
           document.getElementById('discoveredCategories').style.display = 'block';
           statusEl.textContent = `Found ${data.discovered} categories!`;

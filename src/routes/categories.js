@@ -28,42 +28,67 @@ router.get('/tree', async (req, res) => {
   }
 });
 
-// Discover categories from Continente "Produtos" menu
+// Discover categories from stored products (faster than scraping)
 router.get('/discover', async (req, res) => {
   try {
-    const browser = await puppeteer.launch({
-      executablePath: CHROME_PATH,
-      headless: true,
-      args: ['--no-sandbox'],
+    // Get unique category paths from products
+    const products = await prisma.product.findMany({
+      select: {
+        category: true,
+        subcategory: true,
+        subsubcategory: true,
+      },
+      distinct: ['category', 'subcategory', 'subsubcategory'],
+      where: {
+        OR: [
+          { category: { not: null } },
+          { subcategory: { not: null } },
+          { subsubcategory: { not: null } },
+        ],
+      },
     });
-
-    const page = await browser.newPage();
-    await page.goto('https://www.continente.pt', { waitUntil: 'networkidle2', timeout: 60000 });
-    await page.waitForTimeout(2000);
     
-    const categories = await page.evaluate(() => {
-      const results = [];
-      const links = document.querySelectorAll('a[href*="/produtos/"], a[href*="/mercearia/"], a[href*="/frescos/"], a[href*="/laticinios/"], a[href*="/congelados/"], a[href*="/bebidas/"]');
+    // Build category tree
+    const categoryMap = new Map();
+    
+    products.forEach(p => {
+      const main = p.category || 'Other';
+      const sub = p.subcategory || '';
+      const subsub = p.subsubcategory || '';
       
-      links.forEach(link => {
-        const href = link.href;
-        const text = link.textContent.trim();
-        const parts = href.split('/').filter(p => p);
-        const categoryPart = parts.find(p => 
-          p.includes('mercearia') || p.includes('frescos') || p.includes('laticinios') || 
-          p.includes('congelados') || p.includes('bebidas')
-        );
-        
-        if (categoryPart && text.length > 2 && text.length < 50) {
-          results.push({ url: href, name: text, category: categoryPart });
+      if (main && main !== 'Other') {
+        const key = main;
+        if (!categoryMap.has(key)) {
+          categoryMap.set(key, new Set());
         }
-      });
-      return results;
+        if (sub) {
+          categoryMap.get(key).add(sub);
+        }
+      }
     });
     
-    await browser.close();
-    const unique = [...new Map(categories.map(c => [c.url, c])).values()];
-    res.json({ discovered: unique.length, categories: unique });
+    // Convert to array format
+    const categories = [];
+    categoryMap.forEach((subs, main) => {
+      subs.forEach(sub => {
+        categories.push({
+          url: `/${main.toLowerCase()}/${sub.toLowerCase().replace(/ /g, '-')}/`,
+          name: `${main} > ${sub}`,
+          category: main.toLowerCase(),
+        });
+      });
+      // Also add main category without sub
+      categories.push({
+        url: `/${main.toLowerCase()}/`,
+        name: main,
+        category: main.toLowerCase(),
+      });
+    });
+    
+    res.json({
+      discovered: categories.length,
+      categories: categories.sort((a, b) => a.name.localeCompare(b.name)),
+    });
   } catch (error) {
     console.error('Error discovering categories:', error);
     res.status(500).json({ error: 'Failed to discover categories: ' + error.message });
