@@ -350,26 +350,49 @@
           const select = document.getElementById('discoveredCategorySelect');
           select.innerHTML = '<option value="">Select a category...</option>';
           
-          // Group by main category
+          // Group by 3-level hierarchy
           const grouped = {};
           data.categories.forEach(c => {
-            const main = c.category || 'Other';
-            if (!grouped[main]) grouped[main] = [];
-            grouped[main].push(c);
+            // Extract all levels from URL
+            const urlParts = c.url.split('/').filter(p => p && !p.includes('www.continente.pt'));
+            const main = urlParts[0] || 'Other';
+            const sub = urlParts[1] || '';
+            const subsub = urlParts[2] || '';
+            
+            const key = main + '|' + sub;
+            if (!grouped[key]) {
+              grouped[key] = { main, sub, items: [] };
+            }
+            if (subsub && !grouped[key].items.includes(subsub)) {
+              grouped[key].items.push(subsub);
+            }
           });
           
-          Object.keys(grouped).sort().forEach(main => {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = main.charAt(0).toUpperCase() + main.slice(1);
-            grouped[main].forEach(c => {
-              const option = document.createElement('option');
-              option.value = c.url;
-              // Extract category from URL
-              const urlParts = c.url.split('/').filter(p => p);
-              option.textContent = c.name || urlParts[urlParts.length - 1];
-              optgroup.appendChild(option);
-            });
-            select.appendChild(optgroup);
+          // Build optgroups by main > sub
+          Object.keys(grouped).sort().forEach(key => {
+            const g = grouped[key];
+            if (g.sub) {
+              // Has subcategory - create optgroup
+              const optgroup = document.createElement('optgroup');
+              optgroup.label = g.main.charAt(0).toUpperCase() + g.main.slice(1) + ' > ' + g.sub.replace(/-/g, ' ');
+              
+              // Add items as options
+              if (g.items.length > 0) {
+                g.items.sort().forEach(item => {
+                  const option = document.createElement('option');
+                  option.value = `/${g.main}/${g.sub}/${item}/`;
+                  option.textContent = item.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                  optgroup.appendChild(option);
+                });
+              } else {
+                // No subsub - just use the subcategory URL
+                const option = document.createElement('option');
+                option.value = `/${g.main}/${g.sub}/`;
+                option.textContent = g.sub.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                optgroup.appendChild(option);
+              }
+              select.appendChild(optgroup);
+            }
           });
           
           document.getElementById('discoveredCategories').style.display = 'block';
