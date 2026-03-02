@@ -211,8 +211,8 @@ async function extractProductData(page) {
     // PVP (original price when on discount): "PVPR 3,15€"
     const pvpMatch = text.match(/PVPR\s*(\d+[\s,]\d{2})\s*€/);
     
-    // Extract category from URL path
-    const pageUrl = page.url();
+    // Extract category from URL - use property with fallback
+    const pageUrl = page.url || '';
     const categoryMap = {
       'mercearia': 'Mercearia', 'frescos': 'Frescos', 'frescos-frutas': 'Frescos',
       'frescos-legumes': 'Frescos', 'frescos-talho': 'Frescos', 'frescos-peixaria': 'Frescos',

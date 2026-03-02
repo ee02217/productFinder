@@ -1,0 +1,1577 @@
+[
+  {
+    "category": "animais",
+    "subcategories": [
+      {
+        "name": "cao",
+        "subsubcategories": [
+          "brinquedos",
+          "camas-almofadas-e-colchoes",
+          "casotas",
+          "comedouros-e-bebedouros",
+          "comida-humida",
+          "racao-seca",
+          "saude-e-higiene",
+          "snacks-e-biscoitos",
+          "transporte-passeio-e-viagem"
+        ]
+      },
+      {
+        "name": "gato",
+        "subsubcategories": [
+          "areias",
+          "brinquedos-e-arranhadores",
+          "caixas-de-areia-e-higiene",
+          "camas-transporte-e-viagem",
+          "comedouros-e-bebedouros",
+          "comida-humida",
+          "racao-seca",
+          "snacks-leites-e-biscoitos"
+        ]
+      },
+      {
+        "name": "outros-animais",
+        "subsubcategories": [
+          "passaros",
+          "peixes",
+          "roedores",
+          "tartarugas"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "bebe",
+    "subcategories": [
+      {
+        "name": "alimentacao-infantil",
+        "subsubcategories": []
+      },
+      {
+        "name": "banheiras-e-complementos",
+        "subsubcategories": [
+          "bacios-e-redutores",
+          "banheiras-e-acessorios",
+          "muda-fraldas-e-contentores"
+        ]
+      },
+      {
+        "name": "banho-e-higiene",
+        "subsubcategories": [
+          "cabelo-e-perfumaria",
+          "cotonetes-e-soro-fisiologico",
+          "gel-de-banho",
+          "protecao-e-hidratacao"
+        ]
+      },
+      {
+        "name": "brinquedos-e-livros",
+        "subsubcategories": [
+          "brinquedos-de-bebe",
+          "livros-de-bebe",
+          "livros-de-gravidez-e-puericultura"
+        ]
+      },
+      {
+        "name": "cadeiras-auto-e-carrinhos",
+        "subsubcategories": [
+          "cadeiras-e-assentos-auto",
+          "carrinhos-de-passeio",
+          "sacos-marsupios-e-acessorios"
+        ]
+      },
+      {
+        "name": "cadeiras-e-acessorios-de-refeicao",
+        "subsubcategories": [
+          "babetes",
+          "biberoes-e-tetinas",
+          "cadeiras-de-refeicao",
+          "pratos-copos-e-talheres"
+        ]
+      },
+      {
+        "name": "chupetas-e-mordedores",
+        "subsubcategories": []
+      },
+      {
+        "name": "fraldas-e-toalhitas",
+        "subsubcategories": [
+          "fraldas-cueca",
+          "fraldas-de-banho",
+          "resguardos",
+          "toalhitas"
+        ]
+      },
+      {
+        "name": "mobiliario-e-colchoes",
+        "subsubcategories": [
+          "arrumacao-e-organizacao",
+          "camas-bercos-e-colchoes",
+          "com-desconto",
+          "decoracao-e-seguranca",
+          "espreguicadeiras-parques-e-andadores",
+          "mobiliario-didatico"
+        ]
+      },
+      {
+        "name": "textil-de-bebe",
+        "subsubcategories": [
+          "fraldas-de-pano-e-doudous",
+          "roupa-de-cama",
+          "sacos-de-dormir-almofadas-e-ninhos",
+          "toalhas-de-banho"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "bebidas-e-garrafeira",
+    "subcategories": [
+      {
+        "name": "agua",
+        "subsubcategories": [
+          "agua-com-gas",
+          "agua-com-sabor",
+          "agua-sem-gas",
+          "agua-tonica-e-ginger-ale"
+        ]
+      },
+      {
+        "name": "bebidas-energeticas-e-isotonicas",
+        "subsubcategories": []
+      },
+      {
+        "name": "bebidas-espirituosas",
+        "subsubcategories": [
+          "aguardente",
+          "aperitivos",
+          "brandy-conhaque-e-cachaca",
+          "cocktails",
+          "gin",
+          "licores",
+          "rum",
+          "tequila",
+          "vodka",
+          "whisky"
+        ]
+      },
+      {
+        "name": "cervejas-e-sidras",
+        "subsubcategories": [
+          "cerveja-estrangeira-e-artesanal",
+          "cerveja-sem-alcool",
+          "cerveja-tradicional",
+          "menos-que-pvpr",
+          "sidras-e-hard-seltzers"
+        ]
+      },
+      {
+        "name": "champanhe-e-espumante",
+        "subsubcategories": [
+          "champanhe",
+          "espumante"
+        ]
+      },
+      {
+        "name": "sumos-e-refrigerantes",
+        "subsubcategories": [
+          "ice-tea-tisanas-e-kombuchas",
+          "nectares",
+          "refrigerantes-com-gas",
+          "refrigerantes-sem-gas",
+          "sumos-concentrados",
+          "sumos-de-fruta",
+          "sumos-infantis"
+        ]
+      },
+      {
+        "name": "vinhos",
+        "subsubcategories": [
+          "sangrias-e-aromatizados",
+          "vinho-branco",
+          "vinho-do-porto",
+          "vinho-moscatel-da-madeira-e-outros",
+          "vinho-rose",
+          "vinho-tinto",
+          "vinho-verde",
+          "vinhos-premiados"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "beleza",
+    "subcategories": [
+      {
+        "name": "beleza-coreana",
+        "subsubcategories": []
+      }
+    ]
+  },
+  {
+    "category": "beleza-e-higiene",
+    "subcategories": [
+      {
+        "name": "beleza",
+        "subsubcategories": [
+          "beleza-coreana"
+        ]
+      },
+      {
+        "name": "cabelo",
+        "subsubcategories": [
+          "acessorios",
+          "champos",
+          "coloracoes",
+          "condicionadores",
+          "crianca",
+          "mascaras-e-tratamentos",
+          "spray-espuma-creme-e-gel"
+        ]
+      },
+      {
+        "name": "coffrets-e-presentes-em-beleza",
+        "subsubcategories": [
+          "coffrets-de-rosto-e-corpo",
+          "escovas-eletricas-e-maquinas-de-barbear",
+          "maquilhagem-para-oferecer",
+          "o-perfume-perfeito",
+          "os-favoritos-de-crianca"
+        ]
+      },
+      {
+        "name": "corpo",
+        "subsubcategories": [
+          "acessorios",
+          "colonias-e-perfumes",
+          "cremes-e-locoes",
+          "cuidados-de-maos-e-pes",
+          "depilacao-e-descoloracao",
+          "desodorizantes",
+          "gel-de-banho",
+          "sabonetes"
+        ]
+      },
+      {
+        "name": "higiene-intima",
+        "subsubcategories": [
+          "gel-e-sabonetes-intimos",
+          "incontinencia",
+          "pensos-diarios",
+          "pensos-e-cuecas-menstruais",
+          "tampoes",
+          "toalhitas-intimas"
+        ]
+      },
+      {
+        "name": "higiene-oral",
+        "subsubcategories": [
+          "cuidados-para-proteses",
+          "elixires-bucais",
+          "escovas-de-dentes",
+          "fio-e-fita-dentaria",
+          "higiene-oral-infantil",
+          "pastas-de-dentes"
+        ]
+      },
+      {
+        "name": "homem",
+        "subsubcategories": [
+          "barba",
+          "cabelo",
+          "depilatorios",
+          "desodorizantes",
+          "gel-de-banho",
+          "incontinencia",
+          "rosto"
+        ]
+      },
+      {
+        "name": "lencos-e-cuidados-de-saude",
+        "subsubcategories": [
+          "cuidados-de-saude",
+          "lencos-de-papel"
+        ]
+      },
+      {
+        "name": "maquilhagem",
+        "subsubcategories": [
+          "acessorios",
+          "labios",
+          "olhos",
+          "rosto",
+          "unhas"
+        ]
+      },
+      {
+        "name": "papel-higienico",
+        "subsubcategories": [
+          "papel-higienico-compacto",
+          "papel-higienico-humido"
+        ]
+      },
+      {
+        "name": "preservativos-e-estimuladores",
+        "subsubcategories": []
+      },
+      {
+        "name": "rosto",
+        "subsubcategories": [
+          "cremes",
+          "labios",
+          "limpeza-e-desmaquilhantes",
+          "mascaras",
+          "seruns-e-tonicos"
+        ]
+      },
+      {
+        "name": "solares-e-bronzeadores",
+        "subsubcategories": [
+          "after-sun",
+          "bronzeadores-e-autobronzeadores",
+          "protetores-solares-corpo",
+          "protetores-solares-criancas",
+          "protetores-solares-rosto"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "bio-e-saudavel",
+    "subcategories": [
+      {
+        "name": "biologicos",
+        "subsubcategories": [
+          "alimentacao-infantil",
+          "bebidas-e-garrafeira",
+          "frutas-e-legumes",
+          "laticinios-e-alternativas",
+          "mercearia",
+          "peixaria-talho-e-alternativas"
+        ]
+      },
+      {
+        "name": "nutricao-desportiva",
+        "subsubcategories": [
+          "aveia-muesli-e-preparados",
+          "barras-e-snacks",
+          "cremes-de-barrar",
+          "energia-e-proteina",
+          "iogurtes-pudins-e-bebidas-proteicas"
+        ]
+      },
+      {
+        "name": "sem-gluten",
+        "subsubcategories": [
+          "bolachas-e-aperitivos",
+          "cereais-e-barras",
+          "chocolates",
+          "congelados",
+          "massas-e-farinhas",
+          "padaria-e-pastelaria"
+        ]
+      },
+      {
+        "name": "sem-lactose",
+        "subsubcategories": [
+          "gelados",
+          "iogurtes",
+          "leite-e-natas",
+          "manteigas-e-cremes-para-barrar",
+          "queijos"
+        ]
+      },
+      {
+        "name": "suplementos-e-vitaminas",
+        "subsubcategories": []
+      },
+      {
+        "name": "vegetariano-e-vegan",
+        "subsubcategories": [
+          "alternativas-carne-e-peixe",
+          "bebidas-vegetais-e-vegegurtes",
+          "bolachas",
+          "fatiados-e-cremes-vegetais",
+          "refeicoes",
+          "sobremesas-e-gelados"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "black-friday",
+    "subcategories": []
+  },
+  {
+    "category": "brinquedos-e-jogos",
+    "subcategories": [
+      {
+        "name": "bonecas",
+        "subsubcategories": [
+          "bonecas-bebe",
+          "bonecas-fashion",
+          "bonecas-princesas",
+          "bonecas-reborn",
+          "casas-e-acessorios"
+        ]
+      },
+      {
+        "name": "carrinhos-pistas-e-telecomandados",
+        "subsubcategories": [
+          "carrinhos-e-motas",
+          "pistas-e-garagens",
+          "telecomandados"
+        ]
+      },
+      {
+        "name": "consolas-e-videojogos",
+        "subsubcategories": []
+      },
+      {
+        "name": "didaticos-e-criativos",
+        "subsubcategories": [
+          "brinquedos-didaticos",
+          "kits-ciencia-e-mecanica",
+          "kits-criativos",
+          "livros-de-pintar",
+          "plasticinas-e-slime"
+        ]
+      },
+      {
+        "name": "eletronicos",
+        "subsubcategories": [
+          "brinquedos-eletronicos",
+          "drones",
+          "instrumentos-musicais",
+          "robos",
+          "tech-toys"
+        ]
+      },
+      {
+        "name": "faz-de-conta",
+        "subsubcategories": [
+          "casa-e-profissoes",
+          "disfarces",
+          "instrumentos-musicais",
+          "maquilhagem-joias-e-acessorios"
+        ]
+      },
+      {
+        "name": "funko-personagens-e-herois",
+        "subsubcategories": [
+          "figuras-de-acao-e-herois",
+          "figuras-e-personagens",
+          "funko"
+        ]
+      },
+      {
+        "name": "jogos",
+        "subsubcategories": [
+          "jogos-de-cartas",
+          "jogos-de-tabuleiro",
+          "jogos-educativos-e-didaticos",
+          "jogos-em-familia",
+          "jogos-infantis",
+          "party-games"
+        ]
+      },
+      {
+        "name": "lego",
+        "subsubcategories": [
+          "lego-botanicals",
+          "lego-city",
+          "lego-creator",
+          "lego-disney",
+          "lego-duplo",
+          "lego-friends",
+          "lego-harry-potter",
+          "lego-icons",
+          "lego-marvel",
+          "lego-minecraft",
+          "lego-ninjago",
+          "lego-speed-champions",
+          "lego-star-wars",
+          "lego-super-mario",
+          "lego-technic",
+          "mais-marcas-lego"
+        ]
+      },
+      {
+        "name": "peluches-e-brinquedos-de-bebe",
+        "subsubcategories": [
+          "brinquedos-de-bebe",
+          "peluches",
+          "peluches-interativos"
+        ]
+      },
+      {
+        "name": "puzzles",
+        "subsubcategories": [
+          "puzzles-adulto",
+          "puzzles-infantis"
+        ]
+      },
+      {
+        "name": "todos",
+        "subsubcategories": [
+          "menos-que-pvpr"
+        ]
+      },
+      {
+        "name": "veiculos-e-brinquedos-de-exterior",
+        "subsubcategories": [
+          "andadores-e-triciclos",
+          "bicicletas-trotinetes-e-patins",
+          "carros",
+          "casas-de-brincar",
+          "escorregas-e-baloicos",
+          "jogos-e-nerf",
+          "motas",
+          "praia-piscinas-e-boias"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "casa-bricolage-e-jardim",
+    "subcategories": [
+      {
+        "name": "bricolage",
+        "subsubcategories": [
+          "acessorios-de-pintura",
+          "ferramentas",
+          "lavadoras-e-aspiradores",
+          "quinquilharia",
+          "silicones-colas-e-fitas"
+        ]
+      },
+      {
+        "name": "cozinha",
+        "subsubcategories": [
+          "acessorios-de-bancada",
+          "caixas-e-conservacao-de-alimentos",
+          "facas-e-utensilios",
+          "formas-e-utensilios-de-pastelaria",
+          "jarros-e-filtros-de-agua",
+          "lancheiras-geleiras-e-garrafas",
+          "louca-de-fogao",
+          "louca-de-forno"
+        ]
+      },
+      {
+        "name": "decoracao",
+        "subsubcategories": [
+          "acessorios-decorativos",
+          "almofadas-decorativas-mantas-e-coxins",
+          "arvores-bolas-e-figuras-de-natal",
+          "candeeiros-e-abajures",
+          "cestos-e-caixas-decorativas",
+          "molduras-para-fotografias",
+          "plantas-artificiais",
+          "tapetes-passadeiras-e-capachos",
+          "velas-e-ambientadores"
+        ]
+      },
+      {
+        "name": "eletrodomesticos",
+        "subsubcategories": [
+          "aquecimento-ventilacao-e-desumidificadores",
+          "aspiradores-e-lavadoras",
+          "cuidados-da-roupa",
+          "cuidados-pessoais",
+          "maquinas-de-cafe-e-jarros-eletricos",
+          "preparacao-de-alimentos",
+          "tecnologia-e-acessorios"
+        ]
+      },
+      {
+        "name": "festa",
+        "subsubcategories": [
+          "baloes-e-decoracao-de-festa",
+          "mesa-de-festa",
+          "velas-de-aniversario"
+        ]
+      },
+      {
+        "name": "jardim",
+        "subsubcategories": [
+          "barbecues-e-carvao",
+          "iluminacao-exterior",
+          "mobiliario",
+          "pesticidas-sementes-e-substratos",
+          "piscinas-e-acessorios",
+          "plantas-e-flores-naturais",
+          "praia",
+          "vasos-e-acessorios-de-jardinagem"
+        ]
+      },
+      {
+        "name": "lavandaria-e-organizacao",
+        "subsubcategories": [
+          "acessorios-casa-de-banho",
+          "arrumacao-e-caixas",
+          "bacias-e-cestos-de-roupa",
+          "baldes-do-lixo",
+          "costura",
+          "estendais-e-molas",
+          "tabuas-de-engomar",
+          "utensilios-de-limpeza"
+        ]
+      },
+      {
+        "name": "mesa",
+        "subsubcategories": [
+          "acessorios-de-vinho",
+          "canecas-e-chavenas",
+          "copos-e-jarros",
+          "faqueiros-e-talheres",
+          "louca-de-servir",
+          "pratos-e-servicos-de-mesa"
+        ]
+      },
+      {
+        "name": "mobiliario-e-colchoes",
+        "subsubcategories": [
+          "armarios-roupeiros-e-comodas",
+          "cadeiras-e-bancos",
+          "camas-e-colchoes",
+          "mesas-de-refeicao-centro-e-apoio",
+          "mobiliario-exterior",
+          "moveis-tv-estantes-e-aparadores",
+          "secretarias-e-cadeiras-de-escritorio",
+          "sofas-poltronas-e-puffs"
+        ]
+      },
+      {
+        "name": "pilhas-e-lampadas",
+        "subsubcategories": [
+          "extensoes-e-blocos-de-tomadas",
+          "lampadas",
+          "pilhas"
+        ]
+      },
+      {
+        "name": "textil-lar",
+        "subsubcategories": [
+          "almofadas-de-dormir",
+          "almofadas-decorativas-mantas-e-coxins",
+          "panos-aventais-e-pegas-de-cozinha",
+          "roupa-de-cama",
+          "tapetes-e-cortinas-de-banho",
+          "tapetes-passadeiras-e-capachos",
+          "toalhas-de-banho",
+          "toalhas-de-mesa-e-individuais"
+        ]
+      },
+      {
+        "name": "tudo-para-a-casa",
+        "subsubcategories": []
+      }
+    ]
+  },
+  {
+    "category": "congelados",
+    "subcategories": [
+      {
+        "name": "batata-frita-e-pure",
+        "subsubcategories": []
+      },
+      {
+        "name": "douradinhos-e-filetes",
+        "subsubcategories": []
+      },
+      {
+        "name": "frutas-e-legumes",
+        "subsubcategories": [
+          "frutas",
+          "legumes",
+          "misturas-de-legumes"
+        ]
+      },
+      {
+        "name": "gelados",
+        "subsubcategories": [
+          "gelados-americanos",
+          "gelados-de-cone",
+          "gelados-de-pauzinho",
+          "gelados-familiares",
+          "gelados-infantis",
+          "gelados-vegan",
+          "mini-bites-e-sandwich",
+          "tartes-geladas-e-viennettas"
+        ]
+      },
+      {
+        "name": "hamburgueres-e-almondegas",
+        "subsubcategories": []
+      },
+      {
+        "name": "menos-que-pvpr",
+        "subsubcategories": []
+      },
+      {
+        "name": "nuggets-e-crocantes",
+        "subsubcategories": []
+      },
+      {
+        "name": "peixe-marisco-e-carne",
+        "subsubcategories": [
+          "carne"
+        ]
+      },
+      {
+        "name": "pizzas",
+        "subsubcategories": []
+      },
+      {
+        "name": "refeicoes-prontas",
+        "subsubcategories": [
+          "carne",
+          "massas-e-gnocchis",
+          "peixe",
+          "salteados-e-sopas"
+        ]
+      },
+      {
+        "name": "salgados-folhados-e-pastelaria",
+        "subsubcategories": [
+          "folhados",
+          "pao-de-alho-e-pao-de-queijo",
+          "pastelaria-doce",
+          "salgados"
+        ]
+      },
+      {
+        "name": "sobremesas",
+        "subsubcategories": [
+          "bolos-congelados",
+          "crepes-e-petit-gateau"
+        ]
+      },
+      {
+        "name": "vegetariano-e-vegan",
+        "subsubcategories": [
+          "hamburgueres-e-almondegas",
+          "nuggets-e-panados",
+          "refeicoes-pizzas-e-falafel"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "contactos",
+    "subcategories": []
+  },
+  {
+    "category": "cyber-monday",
+    "subcategories": []
+  },
+  {
+    "category": "desporto-roupa-e-viagem",
+    "subcategories": [
+      {
+        "name": "automovel-e-motos",
+        "subsubcategories": [
+          "acessorios-e-manutencao-auto",
+          "acessorios-e-manutencao-de-motos"
+        ]
+      },
+      {
+        "name": "bicicletas-trotinetes-e-patins",
+        "subsubcategories": [
+          "bicicletas",
+          "capacetes-protecoes-e-acessorios",
+          "trotinetes-patins-e-skates"
+        ]
+      },
+      {
+        "name": "campismo",
+        "subsubcategories": []
+      },
+      {
+        "name": "desportos",
+        "subsubcategories": []
+      },
+      {
+        "name": "malas-e-acessorios-de-viagem",
+        "subsubcategories": [
+          "acessorios-de-viagem",
+          "malas-de-cabine",
+          "malas-de-viagem-grandes",
+          "malas-de-viagem-medias",
+          "mochilas-de-viagem"
+        ]
+      },
+      {
+        "name": "mobilidade-eletrica",
+        "subsubcategories": []
+      },
+      {
+        "name": "roupa-e-calcado",
+        "subsubcategories": [
+          "calcado-e-acessorios",
+          "roupa-de-desporto",
+          "roupa-interior"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "entregazero",
+    "subcategories": []
+  },
+  {
+    "category": "experimente-as-nossas-novidades",
+    "subcategories": []
+  },
+  {
+    "category": "folhetos",
+    "subcategories": []
+  },
+  {
+    "category": "frescos",
+    "subcategories": [
+      {
+        "name": "charcutaria",
+        "subsubcategories": [
+          "alheira-e-farinheira",
+          "bacon-e-fumados",
+          "chourico-e-morcela",
+          "fiambre-mortadela-e-salame",
+          "presunto",
+          "salmao-fumado-e-especialidades",
+          "salpicao-paio-e-fuet",
+          "salsichas-e-linguicas",
+          "tabuas-e-aperitivos"
+        ]
+      },
+      {
+        "name": "frutas",
+        "subsubcategories": [
+          "banana-maca-e-pera",
+          "cabazes-de-frutas-e-legumes",
+          "frutas-da-epoca",
+          "frutos-secos-desidratados-e-sementes",
+          "laranja-clementina-e-limao",
+          "morango-e-frutos-vermelhos",
+          "uvas-e-tropicais"
+        ]
+      },
+      {
+        "name": "legumes",
+        "subsubcategories": [
+          "alface-tomate-pepino-e-pimento",
+          "batata-batata-doce-e-mandioca",
+          "cebola-alho-e-nabo",
+          "cenoura-abobora-e-beterraba",
+          "cogumelos-espargos-e-exoticos",
+          "couves-brocolos-e-espinafres",
+          "curgete-beringela-e-feijao-verde",
+          "ervas-aromaticas-e-especiarias",
+          "saladas-sopas-e-salteados",
+          "tremocos-e-azeitonas"
+        ]
+      },
+      {
+        "name": "padaria-e-pastelaria",
+        "subsubcategories": [
+          "biscoitos",
+          "bolos-e-sobremesas",
+          "croissants-e-paes-de-leite",
+          "massas-para-culinaria",
+          "pao-de-forma-e-embalado",
+          "pao-de-hamburguer-cachorro-e-wraps",
+          "pao-do-dia-e-broa",
+          "pastelaria-sortida",
+          "tostas-gressinos-e-croutons"
+        ]
+      },
+      {
+        "name": "peixaria",
+        "subsubcategories": [
+          "bacalhau",
+          "filetes-lombos-e-postas",
+          "marisco",
+          "peixe-congelado",
+          "peixe-fresco",
+          "polvo-lulas-e-chocos",
+          "salmao-fumado-e-especialidades"
+        ]
+      },
+      {
+        "name": "queijos",
+        "subsubcategories": [
+          "amanteigado",
+          "curado",
+          "fatiado-e-bolas",
+          "fresco-requeijao-e-mozzarella",
+          "queijos-do-mundo",
+          "ralado",
+          "snacks-e-barrar",
+          "tabuas-e-aperitivos"
+        ]
+      },
+      {
+        "name": "take-away",
+        "subsubcategories": [
+          "entradas-e-salgados",
+          "grab-go",
+          "massas-frescas",
+          "pizzas",
+          "refeicoes-prontas",
+          "sobremesas",
+          "sopas",
+          "vegetariano-e-vegan"
+        ]
+      },
+      {
+        "name": "talho",
+        "subsubcategories": [
+          "cabrito-e-borrego",
+          "frango-e-peru",
+          "novilho-vitela-e-vitelao",
+          "pato-e-coelho",
+          "porco",
+          "pronto-a-cozinhar"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "laticinios-e-ovos",
+    "subcategories": [
+      {
+        "name": "bebidas-vegetais",
+        "subsubcategories": [
+          "bebida-amendoa",
+          "bebida-arroz",
+          "bebida-aveia",
+          "bebida-soja",
+          "outras-bebidas-vegetais"
+        ]
+      },
+      {
+        "name": "iogurtes",
+        "subsubcategories": [
+          "iogurtes-aromas-e-naturais",
+          "iogurtes-bebe",
+          "iogurtes-bifidus",
+          "iogurtes-gregos",
+          "iogurtes-infantis",
+          "iogurtes-kefir",
+          "iogurtes-liquidos",
+          "iogurtes-magros",
+          "iogurtes-pedacos",
+          "iogurtes-proteina",
+          "iogurtes-sem-lactose",
+          "menos-que-pvpr",
+          "vegegurtes-e-yofu"
+        ]
+      },
+      {
+        "name": "leite",
+        "subsubcategories": [
+          "leite-achocolatado-e-aromatizado",
+          "leite-inteiro",
+          "leite-magro",
+          "leite-meio-gordo",
+          "leite-sem-lactose"
+        ]
+      },
+      {
+        "name": "manteigas-e-cremes-para-barrar",
+        "subsubcategories": [
+          "cremes-culinarios",
+          "cremes-para-barrar",
+          "manteigas"
+        ]
+      },
+      {
+        "name": "natas-e-bechamel",
+        "subsubcategories": [
+          "cremes-vegetais",
+          "molho-bechamel",
+          "natas-culinarias",
+          "natas-para-bater-e-chantilly"
+        ]
+      },
+      {
+        "name": "ovos",
+        "subsubcategories": []
+      },
+      {
+        "name": "sobremesas",
+        "subsubcategories": [
+          "gelatinas",
+          "mousses-e-pudins"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "limpeza",
+    "subcategories": [
+      {
+        "name": "casa-de-banho",
+        "subsubcategories": [
+          "abrasivos-sanitarios",
+          "blocos-sanitarios",
+          "desentupidores",
+          "multisuperficies"
+        ]
+      },
+      {
+        "name": "chao-e-superficies",
+        "subsubcategories": [
+          "desinfetantes",
+          "lava-tudo",
+          "limpa-vidros",
+          "limpeza-especifica",
+          "lixivias",
+          "madeiras",
+          "multisuperficies"
+        ]
+      },
+      {
+        "name": "cozinha",
+        "subsubcategories": [
+          "aditivos-maquina-loica",
+          "detergente-manual-loica",
+          "detergente-maquina-loica",
+          "limpeza-fogao-forno-e-frigorifico",
+          "multisuperficies",
+          "peliculas-e-sacos-de-conservacao"
+        ]
+      },
+      {
+        "name": "guardanapos-e-rolos",
+        "subsubcategories": [
+          "guardanapos",
+          "rolos-de-cozinha"
+        ]
+      },
+      {
+        "name": "inseticidas-e-desumidificadores",
+        "subsubcategories": [
+          "armadilhas-e-anti-tracas",
+          "desumidificadores",
+          "inseticidas"
+        ]
+      },
+      {
+        "name": "limpeza-auto-e-motos",
+        "subsubcategories": []
+      },
+      {
+        "name": "limpeza-casa-de-banho",
+        "subsubcategories": [
+          "desentupidores"
+        ]
+      },
+      {
+        "name": "mopas-esfregonas-e-vassouras",
+        "subsubcategories": [
+          "baldes-e-esfregonas",
+          "mopas-e-espanadores",
+          "vassouras-e-pas"
+        ]
+      },
+      {
+        "name": "panos-esfregoes-e-luvas",
+        "subsubcategories": [
+          "esfregoes",
+          "luvas",
+          "panos"
+        ]
+      },
+      {
+        "name": "roupa",
+        "subsubcategories": [
+          "aditivos-e-auxiliares",
+          "amaciador-e-intensificador-perfume",
+          "detergente-manual",
+          "detergente-maquina",
+          "limpeza-do-calcado",
+          "menos-que-pvpr",
+          "tratamento-maquina-roupa"
+        ]
+      },
+      {
+        "name": "sacos-e-baldes-do-lixo",
+        "subsubcategories": [
+          "baldes-do-lixo-e-ecopontos",
+          "sacos-do-lixo"
+        ]
+      },
+      {
+        "name": "velas-e-ambientadores",
+        "subsubcategories": [
+          "absorve-odores",
+          "ambientadores-auto",
+          "ambientadores-automaticos",
+          "ambientadores-eletricos",
+          "sprays",
+          "sticks-perfumados",
+          "velas"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "livros",
+    "subcategories": [
+      {
+        "name": "apoio-escolar-e-plano-nacional-de-leitura",
+        "subsubcategories": [
+          "dicionarios-gramaticas-e-agendas",
+          "plano-nacional-de-leitura",
+          "pre-escolar",
+          "secundario"
+        ]
+      },
+      {
+        "name": "banda-desenhada-e-manga",
+        "subsubcategories": [
+          "banda-desenhada-infantil-e-juvenil",
+          "manga",
+          "novela-grafica-e-ilustracao"
+        ]
+      },
+      {
+        "name": "desenvolvimento-pessoal-e-espiritual",
+        "subsubcategories": [
+          "desenvolvimento-pessoal-e-autoajuda",
+          "espiritualidade-e-esoterismo",
+          "religiao-e-moral"
+        ]
+      },
+      {
+        "name": "ereaders-e-acessorios",
+        "subsubcategories": []
+      },
+      {
+        "name": "infantis-e-juvenis",
+        "subsubcategories": [
+          "banda-desenhada",
+          "literatura-e-colecoes-infantis",
+          "literatura-e-colecoes-juvenis",
+          "livros-de-atividades-e-colorir",
+          "livros-de-conhecimento",
+          "livros-para-bebe"
+        ]
+      },
+      {
+        "name": "literatura",
+        "subsubcategories": [
+          "biografias",
+          "contos-e-ensaios",
+          "cronicas-e-atualidade",
+          "fantasia-e-ficcao-cientifica",
+          "historia-e-politica",
+          "humor",
+          "literatura-erotica",
+          "poesia",
+          "policial-e-thriller",
+          "romance",
+          "romance-historico",
+          "young-adult"
+        ]
+      },
+      {
+        "name": "livros-de-bolso",
+        "subsubcategories": []
+      },
+      {
+        "name": "livros-em-ingles",
+        "subsubcategories": []
+      },
+      {
+        "name": "novidades-e-pre-vendas",
+        "subsubcategories": []
+      },
+      {
+        "name": "saude-e-lazer",
+        "subsubcategories": [
+          "culinaria",
+          "desporto",
+          "gravidez-e-puericultura",
+          "lazer-e-tempos-livres",
+          "livros-de-colorir",
+          "natureza-e-animais",
+          "saude-e-bem-estar",
+          "viagens-e-guias-turisticos"
+        ]
+      },
+      {
+        "name": "tecnicos",
+        "subsubcategories": [
+          "arte-arquitetura-e-design",
+          "ciencias",
+          "direito",
+          "economia-e-gestao",
+          "financas-pessoais",
+          "informatica"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "login",
+    "subcategories": []
+  },
+  {
+    "category": "loja-online",
+    "subcategories": [
+      {
+        "name": "ajuda",
+        "subsubcategories": []
+      },
+      {
+        "name": "politica-de-cookies",
+        "subsubcategories": []
+      },
+      {
+        "name": "politica-de-privacidade",
+        "subsubcategories": []
+      },
+      {
+        "name": "politica-de-servicos",
+        "subsubcategories": []
+      }
+    ]
+  },
+  {
+    "category": "marcas",
+    "subcategories": [
+      {
+        "name": "lego",
+        "subsubcategories": []
+      },
+      {
+        "name": "marcas-continente",
+        "subsubcategories": [
+          "continente",
+          "continente-bio",
+          "continente-do-bebe",
+          "continente-eco",
+          "continente-equilibrio",
+          "continente-pet",
+          "continente-selecao",
+          "cozinha-continente"
+        ]
+      },
+      {
+        "name": "mylabel",
+        "subsubcategories": []
+      }
+    ]
+  },
+  {
+    "category": "mercearia",
+    "subcategories": [
+      {
+        "name": "acucar-e-sobremesas",
+        "subsubcategories": [
+          "acucar-e-adocante",
+          "aromas-e-toppings",
+          "cacau-e-chocolates-de-culinaria",
+          "fermento",
+          "gelatinas-e-pudins",
+          "leite-condensado-e-leite-de-coco",
+          "preparados-para-mousses-e-bolos"
+        ]
+      },
+      {
+        "name": "alimentacao-infantil",
+        "subsubcategories": [
+          "alimentos-lacteos",
+          "boioes-saquetas-e-pure-de-fruta",
+          "leites-em-po-e-bebidas-lacteas",
+          "papas-infantis",
+          "refeicoes",
+          "snacks-e-bolachinhas"
+        ]
+      },
+      {
+        "name": "arroz-massa-e-farinha",
+        "subsubcategories": [
+          "arroz",
+          "couscous-quinoa-bulgur-e-outros",
+          "farinha-e-pao-ralado",
+          "feijao-grao-de-bico-e-lentilhas",
+          "massa",
+          "noodles",
+          "pure"
+        ]
+      },
+      {
+        "name": "azeite-oleo-e-vinagre",
+        "subsubcategories": [
+          "azeite",
+          "oleo-alimentar",
+          "vinagre"
+        ]
+      },
+      {
+        "name": "bolachas-biscoitos-e-tostas",
+        "subsubcategories": [
+          "bolachas-com-cobertura-e-recheio",
+          "bolachas-de-chocolate",
+          "bolachas-de-manteiga",
+          "bolachas-e-biscoitos-salgados",
+          "bolachas-fibra-e-sem-acucar",
+          "bolachas-infantis",
+          "bolos-napolitanas-queques",
+          "maria-torrada-e-biscoitos",
+          "sortidos-de-bolachas",
+          "tortitas-de-arroz-e-milho"
+        ]
+      },
+      {
+        "name": "cafe-cha-e-bebidas-soluveis",
+        "subsubcategories": [
+          "bebidas-de-cereais",
+          "cafe-em-capsulas",
+          "cafe-soluvel",
+          "cafe-torrado",
+          "chas-e-infusoes",
+          "chocolate-soluvel"
+        ]
+      },
+      {
+        "name": "cereais-e-barras",
+        "subsubcategories": [
+          "barras-de-cereais",
+          "cereais-infantis",
+          "cereais-linha-e-fibra",
+          "corn-flakes",
+          "flocos-e-papas-de-aveia",
+          "muesli-e-granola"
+        ]
+      },
+      {
+        "name": "chocolate-gomas-e-rebucados",
+        "subsubcategories": [
+          "bombons",
+          "cacau-e-chocolates-de-culinaria",
+          "chocolates",
+          "gomas-pastilhas-e-rebucados",
+          "snacks-de-chocolate"
+        ]
+      },
+      {
+        "name": "compotas-cremes-e-mel",
+        "subsubcategories": [
+          "doces-e-compotas",
+          "marmeladas-e-goiabadas",
+          "mel",
+          "nutella-e-cremes-de-barrar"
+        ]
+      },
+      {
+        "name": "conservas",
+        "subsubcategories": [
+          "atum",
+          "azeitonas-e-tremocos",
+          "cogumelos-milho-ervilhas",
+          "feijao-e-grao-de-bico",
+          "pates",
+          "polpas-e-frutas-em-calda",
+          "refeicoes",
+          "salsichas",
+          "sardinha-cavala-lulas",
+          "tomate-polpa-pelado-e-seco"
+        ]
+      },
+      {
+        "name": "molhos-temperos-e-sal",
+        "subsubcategories": [
+          "caldos",
+          "especiarias-e-ervas-aromaticas",
+          "maionese-ketchup-e-mostarda",
+          "molhos",
+          "preparados-de-sopas",
+          "sal"
+        ]
+      },
+      {
+        "name": "snacks-e-batatas-fritas",
+        "subsubcategories": [
+          "aperitivos-e-snacks",
+          "batatas-fritas",
+          "frutos-secos-desidratados-e-sementes",
+          "pipocas"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "negocios",
+    "subcategories": []
+  },
+  {
+    "category": "novidades",
+    "subcategories": []
+  },
+  {
+    "category": "oportunidades",
+    "subcategories": [
+      {
+        "name": "bazarao",
+        "subsubcategories": []
+      },
+      {
+        "name": "compre-mais-por-menos",
+        "subsubcategories": []
+      },
+      {
+        "name": "cozinhas-do-mundo",
+        "subsubcategories": [
+          "asia",
+          "brasil",
+          "italia",
+          "mexico"
+        ]
+      },
+      {
+        "name": "livros-escolares",
+        "subsubcategories": []
+      },
+      {
+        "name": "regresso-as-aulas",
+        "subsubcategories": []
+      },
+      {
+        "name": "tudo-para-a-casa",
+        "subsubcategories": []
+      }
+    ]
+  },
+  {
+    "category": "papelaria",
+    "subcategories": [
+      {
+        "name": "cadernos-blocos-e-agendas",
+        "subsubcategories": [
+          "blocos-de-apontamentos",
+          "cadernos",
+          "recargas-de-papel",
+          "sinalizadores-e-notas-aderentes"
+        ]
+      },
+      {
+        "name": "desenho-arte-e-pintura",
+        "subsubcategories": [
+          "cartolinas-e-papeis-especiais",
+          "compassos",
+          "guaches-e-aguarelas",
+          "lapis-de-cor-e-cera",
+          "marcadores-de-colorir",
+          "pastas-de-modelar-giz-e-purpurinas",
+          "pinceis-e-acessorios",
+          "reguas-esquadros-e-transferidores",
+          "tintas-e-telas"
+        ]
+      },
+      {
+        "name": "embrulhos-e-sacos-para-presentes",
+        "subsubcategories": []
+      },
+      {
+        "name": "escrita",
+        "subsubcategories": [
+          "borrachas-e-corretores",
+          "esferograficas-rollers-e-tinta-gel",
+          "lapis-e-afias",
+          "lapiseiras-e-minas",
+          "marcadores-e-sublinhadores"
+        ]
+      },
+      {
+        "name": "material-de-escritorio",
+        "subsubcategories": [
+          "agrafadores-e-furadores",
+          "clips-molas-pioneses-e-elasticos",
+          "colas-e-fitas-adesivas",
+          "envelopes-e-correio-verde",
+          "tesouras-e-x-atos"
+        ]
+      },
+      {
+        "name": "mochilas-estojos-e-lancheiras",
+        "subsubcategories": [
+          "estojos",
+          "lancheiras",
+          "mochilas-e-trolleys",
+          "sacos-e-acessorios"
+        ]
+      },
+      {
+        "name": "organizacao-e-arquivo",
+        "subsubcategories": [
+          "bolsas-e-separadores",
+          "capas-e-portefolios",
+          "encadernacao-e-etiquetas",
+          "organizacao-de-secretaria",
+          "pastas-de-arquivo"
+        ]
+      },
+      {
+        "name": "packs-experiencia",
+        "subsubcategories": []
+      },
+      {
+        "name": "papel-de-impressao",
+        "subsubcategories": []
+      },
+      {
+        "name": "publicacoes-e-cartoes-pre-pagos",
+        "subsubcategories": []
+      }
+    ]
+  },
+  {
+    "category": "peixaria-e-talho",
+    "subcategories": [
+      {
+        "name": "peixaria",
+        "subsubcategories": [
+          "peixe-congelado"
+        ]
+      }
+    ]
+  },
+  {
+    "category": "recomendacoes",
+    "subcategories": []
+  },
+  {
+    "category": "servicos",
+    "subcategories": [
+      {
+        "name": "click-go",
+        "subsubcategories": []
+      },
+      {
+        "name": "entrega-zero",
+        "subsubcategories": []
+      },
+      {
+        "name": "plug-and-charge",
+        "subsubcategories": []
+      }
+    ]
+  },
+  {
+    "category": "siga",
+    "subcategories": []
+  },
+  {
+    "category": "singles-day",
+    "subcategories": []
+  },
+  {
+    "category": "sitemap",
+    "subcategories": []
+  }
+]
