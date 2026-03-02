@@ -189,11 +189,39 @@ async function extractProductData(page) {
     // PVP (original price when on discount): "PVPR 3,15€"
     const pvpMatch = text.match(/PVPR\s*(\d+[\s,]\d{2})\s*€/);
     
+    // Extract category from URL path
+    const pageUrl = page.url();
+    const categoryMap = {
+      'mercearia': 'Mercearia', 'frescos': 'Frescos', 'frescos-frutas': 'Frescos',
+      'frescos-legumes': 'Frescos', 'frescos-talho': 'Frescos', 'frescos-peixaria': 'Frescos',
+      'laticinios-e-ovos': 'Laticínios', 'congelados': 'Congelados', 'bebidas-e-garrafeira': 'Bebidas',
+    };
+    
+    let productCategory = null, productSubcategory = null, productSubsubcategory = null;
+    if (!pageUrl.includes('/pesquisa/')) {
+      const pathParts = pageUrl.split('/').filter(p => p && !p.includes('?') && !p.includes('.html'));
+      let currentMain = null;
+      for (const part of pathParts) {
+        if (categoryMap[part]) {
+          currentMain = categoryMap[part];
+          productCategory = currentMain;
+        } else if (currentMain && !productSubcategory) {
+          productSubcategory = part.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        } else if (currentMain && productSubcategory) {
+          productSubsubcategory = part.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          break;
+        }
+      }
+    }
+    
     return {
       ean: eanMatch ? eanMatch[1] : null,
       name: nameEl ? nameEl.textContent.trim() : null,
       brand: brandEl ? brandEl.textContent.trim() : null,
       imageUrl: imgSrc,
+      category: productCategory,
+      subcategory: productSubcategory,
+      subsubcategory: productSubsubcategory,
       price: unitPrice || null,
       pricePerKg: pricePerKg || null,
       pvp: pvpPrice || null,
@@ -337,12 +365,17 @@ async function scrapeCategory(category, limit, delayMs) {
                 ean: data.ean,
                 name: data.name,
                 brand: data.brand,
-                category: category.label,
+                category: data.category || category.label,
+                subcategory: data.subcategory,
+                subsubcategory: data.subsubcategory,
                 imageUrl: data.imageUrl,
               },
               update: {
                 name: data.name,
                 brand: data.brand,
+                category: data.category || category.label,
+                subcategory: data.subcategory,
+                subsubcategory: data.subsubcategory,
                 imageUrl: data.imageUrl,
               },
             });

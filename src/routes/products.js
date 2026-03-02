@@ -19,7 +19,11 @@ router.get('/', async (req, res) => {
       ];
     }
     if (category) {
-      where.category = { contains: category, mode: 'insensitive' };
+      where.OR = [
+        { category: { contains: category, mode: 'insensitive' } },
+        { subcategory: { contains: category, mode: 'insensitive' } },
+        { subsubcategory: { contains: category, mode: 'insensitive' } },
+      ];
     }
 
     const [products, total] = await Promise.all([

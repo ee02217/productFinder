@@ -171,6 +171,9 @@
       <h2>📦 Products</h2>
       <div class="search-bar">
         <input type="text" id="searchInput" placeholder="Search by name, brand, or EAN...">
+        <select id="categoryFilter" style="padding: 0.6rem; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="">All Categories</option>
+        </select>
         <button class="btn btn-secondary" onclick="loadProducts()">Search</button>
       </div>
       <table class="products-table">
@@ -180,6 +183,7 @@
             <th>Name</th>
             <th>Brand</th>
             <th>Category</th>
+            <th>Subcategory</th>
             <th>Price</th>
             <th>Price/kg</th>
             <th>PVP</th>
@@ -277,6 +281,40 @@
       }
     }
 
+    // Load categories for filter
+    async function loadCategories() {
+      try {
+        const res = await fetch(API + '/api/categories/tree');
+        const categories = await res.json();
+        
+        const select = document.getElementById('categoryFilter');
+        // Group by main category
+        const grouped = {};
+        categories.forEach(c => {
+          const main = c.category || 'Other';
+          if (!grouped[main]) grouped[main] = [];
+          if (c.subsubcategory && !grouped[main].includes(c.subsubcategory)) {
+            grouped[main].push(c.subsubcategory);
+          }
+        });
+        
+        // Add options grouped by main category
+        Object.keys(grouped).sort().forEach(main => {
+          const optgroup = document.createElement('optgroup');
+          optgroup.label = main;
+          grouped[main].sort().forEach(sub => {
+            const option = document.createElement('option');
+            option.value = sub;
+            option.textContent = sub;
+            optgroup.appendChild(option);
+          });
+          select.appendChild(optgroup);
+        });
+      } catch (e) {
+        console.error('Failed to load categories:', e);
+      }
+    }
+
     // Load stats
     async function loadStats() {
       try {
@@ -298,10 +336,11 @@
     // Load products
     async function loadProducts(page = 1) {
       const search = document.getElementById('searchInput').value;
+      const categoryFilter = document.getElementById('categoryFilter').value;
       currentPage = page;
       
       try {
-        const res = await fetch(API + `/api/products?page=${page}&limit=50&search=${encodeURIComponent(search)}`);
+        const res = await fetch(API + `/api/products?page=${page}&limit=50&search=${encodeURIComponent(search)}&category=${encodeURIComponent(categoryFilter)}`);
         const data = await res.json();
         
         const tbody = document.getElementById('productsTable');
@@ -314,6 +353,7 @@
               <td>${p.name || '-'}</td>
               <td>${p.brand || '-'}</td>
               <td>${p.category || '-'}</td>
+              <td>${p.subcategory || '-'}</td>
               <td class="price">${p.currentPrice ? (p.currentPrice / 100).toFixed(2) + ' €' : '-'}</td>
               <td class="price">${p.currentPricePerKg ? (p.currentPricePerKg / 100).toFixed(2) + ' €/kg' : '-'}</td>
               <td>${p.currentPvp ? '<span class="original-price">' + (p.currentPvp / 100).toFixed(2) + ' €</span>' : '-'}</td>
@@ -357,6 +397,14 @@
           <div class="product-info-item">
             <label>Category</label>
             <input type="text" id="editCategory" value="${(product.category || '').replace(/"/g, '&quot;')}" style="width: 100%; padding: 4px;">
+          </div>
+          <div class="product-info-item">
+            <label>Subcategory</label>
+            <input type="text" id="editSubcategory" value="${(product.subcategory || '').replace(/"/g, '&quot;')}" style="width: 100%; padding: 4px;">
+          </div>
+          <div class="product-info-item">
+            <label>Sub-subcategory</label>
+            <input type="text" id="editSubsubcategory" value="${(product.subsubcategory || '').replace(/"/g, '&quot;')}" style="width: 100%; padding: 4px;">
           </div>
           <div class="product-info-item">
             <label>Image URL</label>
@@ -423,7 +471,7 @@
         const res = await fetch(API + '/api/products/' + productId, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, brand, category, imageUrl }),
+          body: JSON.stringify({ name, brand, category, subcategory, subsubcategory, imageUrl }),
         });
         
         if (res.ok) {
@@ -572,6 +620,7 @@
     loadSettings();
     loadStats();
     loadProducts();
+    loadCategories();
     checkStatus();
     checkVpnStatus();
     
