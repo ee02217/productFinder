@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 const CHROME_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || 
   (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '/usr/bin/chromium');
 
-// Categories to scrape
+// Categories to scrape (main categories)
 const CATEGORIES = [
   { name: 'mercearia', url: '/mercearia/', label: 'Mercearia' },
   { name: 'frescos-frutas', url: '/frescos/frutas/', label: 'Frescos - Frutas' },
@@ -19,6 +19,17 @@ const CATEGORIES = [
   { name: 'laticinios', url: '/laticinios-e-ovos/', label: 'Laticínios e Ovos' },
   { name: 'congelados', url: '/congelados/', label: 'Congelados' },
   { name: 'bebidas', url: '/bebidas-e-garrafeira/', label: 'Bebidas' },
+  // Subcategories
+  { name: 'mercearia/arroz-massa-e-farinha', url: '/mercearia/arroz-massa-e-farinha/', label: 'Arroz, Massa e Farinha' },
+  { name: 'mercearia/azeite-oleo-e-vinagre', url: '/mercearia/azeite-oleo-e-vinagre/', label: 'Azeite, Óleo e Vinagre' },
+  { name: 'mercearia/bolachas-biscoitos-e-tostas', url: '/mercearia/bolachas-biscoitos-e-tostas/', label: 'Bolachas, Biscoitos e Tostas' },
+  { name: 'frescos/frutas', url: '/frescos/frutas/', label: 'Frutas' },
+  { name: 'frescos/legumes', url: '/frescos/legumes/', label: 'Legumes' },
+  { name: 'frescos/peixaria', url: '/frescos/peixaria/', label: 'Peixaria' },
+  { name: 'frescos/talho', url: '/frescos/talho/', label: 'Talho' },
+  { name: 'laticinios-e-ovos/leite', url: '/laticinios-e-ovos/leite/', label: 'Leite' },
+  { name: 'laticinios-e-ovos/iogurtes', url: '/laticinios-e-ovos/iogurtes/', label: 'Iogurtes' },
+  { name: 'congelados/gelados', url: '/congelados/gelados/', label: 'Gelados' },
 ];
 
 const BASE_URL = 'https://www.continente.pt';
@@ -50,12 +61,21 @@ router.post('/start', async (req, res) => {
   const settings = await prisma.settings.findUnique({ where: { id: 'default' } });
   const delayMs = settings?.delayMs || 2000;
 
-  // Check if category is a full URL or just a name
+  // Check if category is a full URL, has a slash (subcategory), or just a name
   let cat;
-  if (category.startsWith('http') || category.startsWith('/')) {
+  if (category.includes('/')) {
+    // It's a subcategory path like "mercearia/arroz-massa-e-farinha"
+    const parts = category.split('/');
+    const mainCat = CATEGORIES.find(c => c.name === parts[0]);
+    const subPath = parts.slice(1).join('/');
+    cat = {
+      name: category,
+      url: '/' + category + '/',
+      label: subPath.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    };
+  } else if (category.startsWith('http') || category.startsWith('/')) {
     // It's a URL from discovered categories
     const url = category.startsWith('http') ? category : `https://www.continente.pt${category}`;
-    // Extract category name from URL path
     const pathParts = url.split('/').filter(p => p);
     const categoryName = pathParts.find(p => 
       p.includes('mercearia') || p.includes('frescos') || p.includes('laticinios') || 
@@ -64,7 +84,6 @@ router.post('/start', async (req, res) => {
     
     cat = { 
       name: categoryName, 
-      // Ensure URL always has leading slash
       url: '/' + category.replace(/^\/+/, '').replace(/\/+$/, ''),
       label: pathParts[pathParts.length - 1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     };
@@ -116,9 +135,10 @@ function parsePrice(priceStr) {
   return Math.round(price * 100);
 }
 
-// Extract product data
-async function extractProductData(page) {
-  return await page.evaluate(() => {
+// Extract product data - accepts category info from listing page
+async function extractProductData(page, categoryInfo = null) {
+  const currentUrl = page.url;
+  const result = await page.evaluate((url, catInfo) => {
     const eanMatch = document.body.innerHTML.match(/ean=([0-9]{13})/);
     const nameEl = document.querySelector('h1');
     const brandEl = document.querySelector('a[href*="/pesquisa/"]');
@@ -211,27 +231,65 @@ async function extractProductData(page) {
     // PVP (original price when on discount): "PVPR 3,15€"
     const pvpMatch = text.match(/PVPR\s*(\d+[\s,]\d{2})\s*€/);
     
-    // Extract category from URL - use property with fallback
-    const pageUrl = page.url || '';
+    // Extract category from URL
+    const pageUrl = url || '';
     const categoryMap = {
+      // Main categories
       'mercearia': 'Mercearia', 'frescos': 'Frescos', 'frescos-frutas': 'Frescos',
       'frescos-legumes': 'Frescos', 'frescos-talho': 'Frescos', 'frescos-peixaria': 'Frescos',
       'laticinios-e-ovos': 'Laticínios', 'congelados': 'Congelados', 'bebidas-e-garrafeira': 'Bebidas',
+      // Subcategory paths (key = path part, value = parent category)
+      'arroz-massa-e-farinha': 'Mercearia', 'azeite-oleo-e-vinagre': 'Mercearia',
+      'bolachas-biscoitos-e-tostas': 'Mercearia', 'cafe-cha-e-bebidas-soluveis': 'Mercearia',
+      'cereais-e-barras': 'Mercearia', 'chocolate-gomas-e-rebucados': 'Mercearia',
+      'conservas': 'Mercearia', 'molhos-temperos-e-sal': 'Mercearia', 'snacks-e-batatas-fritas': 'Mercearia',
+      // Frescos subcategories
+      'frutas': 'Frescos', 'legumes': 'Frescos', 'peixaria': 'Frescos', 'talho': 'Frescos',
+      'charcutaria': 'Frescos', 'queijos': 'Frescos', 'padaria-e-pastelaria': 'Frescos',
+      // Laticinios subcategories
+      'leite': 'Laticínios', 'iogurtes': 'Laticínios', 'natas-e-bechamel': 'Laticínios',
+      'bebidas-vegetais': 'Laticínios', 'manteigas-e-cremes-para-barrar': 'Laticínios',
+      // Congelados subcategories
+      'gelados': 'Congelados', 'pizzas': 'Congelados', 'refeicoes-prontas': 'Congelados',
     };
     
+    const mainCategories = ['mercearia', 'frescos', 'laticinios-e-ovos', 'congelados', 'bebidas-e-garrafeira'];
+    
     let productCategory = null, productSubcategory = null, productSubsubcategory = null;
-    if (!pageUrl.includes('/pesquisa/')) {
+    
+    // Use category info from listing page if available
+    // catInfo is passed as second argument to evaluate
+    const catPath = catInfo && catInfo.category ? catInfo.category : '';
+    
+    // Use category info from listing page if available
+    if (catPath && catPath.includes('/')) {
+      // It's a subcategory path like "mercearia/arroz-massa-e-farinha"
+      const parts = catPath.split('/');
+      // Use simple mapping for main categories
+      const mainCatMap = {
+        'mercearia': 'Mercearia',
+        'frescos': 'Frescos',
+        'laticinios-e-ovos': 'Laticínios',
+        'congelados': 'Congelados',
+        'bebidas-e-garrafeira': 'Bebidas'
+      };
+      productCategory = mainCatMap[parts[0]] || parts[0];
+      productSubcategory = parts.slice(1).join(' ').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    } else if (catPath) {
+      // Simple category like "mercearia"
+      productCategory = categoryMap[catPath] || catPath;
+    } else if (!pageUrl.includes('/pesquisa/')) {
+      // Fallback: try to extract from product URL
       const pathParts = pageUrl.split('/').filter(p => p && !p.includes('?') && !p.includes('.html'));
       let currentMain = null;
       for (const part of pathParts) {
-        if (categoryMap[part]) {
+        if (mainCategories.includes(part)) {
           currentMain = categoryMap[part];
           productCategory = currentMain;
-        } else if (currentMain && !productSubcategory) {
+        } else if (categoryMap[part] && currentMain) {
           productSubcategory = part.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        } else if (currentMain && productSubcategory) {
+        } else if (currentMain && productSubcategory && !productSubsubcategory) {
           productSubsubcategory = part.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-          break;
         }
       }
     }
@@ -248,7 +306,9 @@ async function extractProductData(page) {
       pricePerKg: pricePerKg || null,
       pvp: pvpPrice || null,
     };
-  });
+  }, currentUrl, categoryInfo);
+
+  return result;
 }
 
 // Get product links from category
@@ -377,7 +437,7 @@ async function scrapeCategory(category, limit, delayMs) {
             }
           }
           
-          const data = await extractProductData(page);
+          const data = await extractProductData(page, { category: category.name, label: category.label });
 
           if (data.ean && data.name) {
             // Upsert product
