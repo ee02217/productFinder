@@ -92,6 +92,15 @@
     <div class="card">
       <h2>🚀 Scrape Products</h2>
       <div class="form-row">
+        <button class="btn btn-secondary" onclick="discoverCategories()">🔍 Discover Categories</button>
+        <span id="categoryStatus"></span>
+      </div>
+      <div id="discoverResults" style="display:none; margin-bottom:1rem;">
+        <select id="discoverSelect" style="width:100%; padding:0.5rem; margin-bottom:0.5rem;">
+          <option value="">Select category...</option>
+        </select>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label>Category</label>
           <select id="categorySelect">
@@ -120,16 +129,19 @@
     <div class="card">
       <h2>📦 Products</h2>
       <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search...">
+        <input type="text" id="searchInput" placeholder="Search by name, brand, or EAN...">
+        <select id="categoryFilter" style="max-width:200px;">
+          <option value="">All Categories</option>
+        </select>
         <button class="btn btn-secondary" onclick="loadProducts(1)">Search</button>
       </div>
       <table class="products-table">
         <thead>
           <tr>
-            <th>EAN</th><th>Name</th><th>Brand</th><th>Category</th><th>Price</th><th>Price/kg</th><th>PVP</th><th>Updated</th>
+            <th>EAN</th><th>Name</th><th>Brand</th><th>Category</th><th>Subcategory</th><th>Price</th><th>Price/kg</th><th>PVP</th><th>Updated</th>
           </tr>
         </thead>
-        <tbody id="productsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
+        <tbody id="productsTable"><tr><td colspan="9">Loading...</td></tr></tbody>
       </table>
       <div class="pagination" id="pagination"></div>
     </div>
@@ -142,9 +154,9 @@
         <button class="modal-close" onclick="closeModal()">×</button>
       </div>
       <div class="product-info" id="productInfo"></div>
-      <button class="btn btn-primary" onclick="saveProduct()">Save</button>
-      <button class="btn btn-danger" onclick="deleteProduct()">Delete</button>
-      <h3>Price History</h3>
+      <button class="btn btn-primary" onclick="saveProduct()">Save Changes</button>
+      <button class="btn btn-danger" onclick="deleteProduct()">Delete Product</button>
+      <h3 style="margin-top:1rem;">Price History</h3>
       <table class="price-table">
         <thead><tr><th>Date</th><th>Price</th><th>Price/kg</th><th>PVP</th><th></th></tr></thead>
         <tbody id="priceHistoryTable"></tbody>
@@ -177,19 +189,52 @@ async function loadStats() {
     const s = await res.json();
     document.getElementById('totalProducts').textContent = s.totalProducts;
     document.getElementById('totalPrices').textContent = s.totalPrices;
-    if(s.recentScrapes?.[0]) document.getElementById('lastScrape').textContent = s.recentScrapes[0].status==='completed'?s.recentScrapes[0].scraped+' prods':'In progress';
+    if(s.recentScrapes&&s.recentScrapes.length>0) {
+      const last = s.recentScrapes[0];
+      document.getElementById('lastScrape').textContent = last.status==='completed'?last.scraped+' prods':'In progress';
+    }
   } catch(e) { console.error(e); }
+}
+
+async function discoverCategories() {
+  const statusEl = document.getElementById('categoryStatus');
+  statusEl.textContent = 'Discovering...';
+  try {
+    const res = await fetch(API+'/api/categories/discover');
+    const data = await res.json();
+    if(data.discovered>0) {
+      const select = document.getElementById('discoverSelect');
+      select.innerHTML = '<option value="">Select category...</option>';
+      data.categories.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.url;
+        opt.textContent = c.name;
+        select.appendChild(opt);
+      });
+      document.getElementById('discoverResults').style.display='block';
+      statusEl.textContent = 'Found '+data.discovered+' categories!';
+    } else {
+      statusEl.textContent = 'No categories found';
+    }
+  } catch(e) {
+    statusEl.textContent = 'Error: '+e.message;
+  }
 }
 
 async function loadProducts(page=1) {
   const search = document.getElementById('searchInput').value;
+  const catFilter = document.getElementById('categoryFilter').value;
   currentPage = page;
   try {
-    const res = await fetch(API+'/api/products?page='+page+'&limit=50&search='+encodeURIComponent(search));
+    const res = await fetch(API+'/api/products?page='+page+'&limit=50&search='+encodeURIComponent(search)+'&category='+encodeURIComponent(catFilter));
     const data = await res.json();
     const tbody = document.getElementById('productsTable');
-    if(!data.products.length) { tbody.innerHTML='<tr><td colspan="8">No products</td></tr>'; return; }
-    tbody.innerHTML = data.products.map(p => '<tr onclick="showProductDetails(\''+p.id+'\')"><td><code>'+(p.ean||'-')+'</code></td><td>'+(p.name||'-')+'</td><td>'+(p.brand||'-')+'</td><td>'+(p.category||'-')+'</td><td class="price">'+(p.currentPrice?(p.currentPrice/100).toFixed(2)+' €':'-')+'</td><td>'+(p.currentPricePerKg?(p.currentPricePerKg/100).toFixed(2)+' €/kg':'-')+'</td><td>'+(p.currentPvp?'<span class="original-price">'+(p.currentPvp/100).toFixed(2)+' €</span>':'-')+'</td><td>'+new Date(p.lastUpdated).toLocaleDateString()+'</td></tr>').join('');
+    if(!data.products.length) { tbody.innerHTML='<tr><td colspan="9">No products found</td></tr>'; }
+    else {
+      tbody.innerHTML = data.products.map(p => 
+        '<tr onclick="showProductDetails(\''+p.id+'\')"><td><code>'+(p.ean||'-')+'</code></td><td>'+(p.name||'-')+'</td><td>'+(p.brand||'-')+'</td><td>'+(p.category||'-')+'</td><td>'+(p.subcategory||'-')+'</td><td class="price">'+(p.currentPrice?(p.currentPrice/100).toFixed(2)+' €':'-')+'</td><td>'+(p.currentPricePerKg?(p.currentPricePerKg/100).toFixed(2)+' €/kg':'-')+'</td><td>'+(p.currentPvp?'<span class="original-price">'+(p.currentPvp/100).toFixed(2)+' €</span>':'-')+'</td><td>'+new Date(p.lastUpdated).toLocaleDateString()+'</td></tr>'
+      ).join('');
+    }
     totalPages = data.pagination.pages;
     renderPagination();
   } catch(e) { console.error(e); }
@@ -206,11 +251,21 @@ async function showProductDetails(id) {
   currentProductId = id;
   const res = await fetch(API+'/api/products/'+id);
   const p = await res.json();
-  document.getElementById('modalTitle').textContent = p.name;
-  document.getElementById('productInfo').innerHTML = '<div class="product-info-item"><label>EAN</label><span>'+(p.ean||'-')+'</span></div><div class="product-info-item"><label>Name</label><input id="editName" value="'+(p.name||'')+'"></div><div class="product-info-item"><label>Brand</label><input id="editBrand" value="'+(p.brand||'')+'"></div><div class="product-info-item"><label>Category</label><input id="editCategory" value="'+(p.category||'')+'"></div><div class="product-info-item"><label>Subcategory</label><input id="editSubcategory" value="'+(p.subcategory||'')+'"></div><div class="product-info-item"><label>Image</label><input id="editImageUrl" value="'+(p.imageUrl||'')+'"></div>';
+  document.getElementById('modalTitle').textContent = p.name||'Product Details';
+  document.getElementById('productInfo').innerHTML = 
+    '<div class="product-info-item"><label>EAN</label><span>'+(p.ean||'-')+'</span></div>'+
+    '<div class="product-info-item"><label>Name</label><input id="editName" value="'+(p.name||'')+'"></div>'+
+    '<div class="product-info-item"><label>Brand</label><input id="editBrand" value="'+(p.brand||'')+'"></div>'+
+    '<div class="product-info-item"><label>Category</label><input id="editCategory" value="'+(p.category||'')+'"></div>'+
+    '<div class="product-info-item"><label>Subcategory</label><input id="editSubcategory" value="'+(p.subcategory||'')+'"></div>'+
+    '<div class="product-info-item"><label>Image URL</label><input id="editImageUrl" value="'+(p.imageUrl||'')+'"></div>';
   const tbody = document.getElementById('priceHistoryTable');
-  if(!p.prices?.length) { tbody.innerHTML='<tr><td colspan="5" class="no-history">No history</td></tr>'; }
-  else { tbody.innerHTML = p.prices.map(pr=>'<tr><td>'+new Date(pr.capturedAt).toLocaleString()+'</td><td class="price">'+(pr.priceCents/100).toFixed(2)+' €</td><td>'+(pr.pricePerKgCents?(pr.pricePerKgCents/100).toFixed(2)+' €/kg':'-')+'</td><td>'+(pr.pvpCents?(pr.pvpCents/100).toFixed(2)+' €':'--')+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deletePrice(\''+pr.id+'\')">X</button></td></tr>').join(''); }
+  if(!p.prices||!p.prices.length) { tbody.innerHTML='<tr><td colspan="5" class="no-history">No price history</td></tr>'; }
+  else {
+    tbody.innerHTML = p.prices.map(pr =>
+      '<tr><td>'+new Date(pr.capturedAt).toLocaleString()+'</td><td class="price">'+(pr.priceCents/100).toFixed(2)+' €</td><td>'+(pr.pricePerKgCents?(pr.pricePerKgCents/100).toFixed(2)+' €/kg':'-')+'</td><td>'+(pr.pvpCents?(pr.pvpCents/100).toFixed(2)+' €':'-')+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deletePrice(\''+pr.id+'\')">X</button></td></tr>'
+    ).join('');
+  }
   document.getElementById('productModal').classList.add('active');
 }
 
@@ -228,19 +283,19 @@ async function saveProduct() {
 }
 
 async function deleteProduct() {
-  if(!confirm('Delete product?'))return;
+  if(!confirm('Delete this product and all price history?'))return;
   await fetch(API+'/api/products/'+currentProductId,{method:'DELETE'});
   closeModal(); loadProducts();
 }
 
 async function deletePrice(pid) {
-  if(!confirm('Delete price?'))return;
+  if(!confirm('Delete this price record?'))return;
   await fetch(API+'/api/products/price/'+pid,{method:'DELETE'});
   showProductDetails(currentProductId);
 }
 
 async function startScraping() {
-  const cat = document.getElementById('categorySelect').value;
+  const cat = document.getElementById('discoverSelect').value || document.getElementById('categorySelect').value;
   const lim = parseInt(document.getElementById('limitInput').value);
   await fetch(API+'/api/scraper/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:cat,limit:lim})});
   checkStatus();
@@ -257,9 +312,9 @@ async function checkStatus() {
     scraperStatus = await res.json();
     const startBtn = document.getElementById('startBtn'), stopBtn = document.getElementById('stopBtn'), jobStatus = document.getElementById('jobStatus');
     if(scraperStatus.isScraping) {
-      startBtn.disabled=true; stopBtn.disabled=false; startBtn.innerHTML='<span class="spinner"></span>...';
+      startBtn.disabled=true; stopBtn.disabled=false; startBtn.innerHTML='<span class="spinner"></span>';
       jobStatus.style.display='block';
-      document.getElementById('jobStatusText').textContent = 'Scraping '+scraperStatus.currentJob?.category;
+      document.getElementById('jobStatusText').textContent = 'Scraping '+(scraperStatus.currentJob?.category||'');
       document.getElementById('jobScraped').textContent = scraperStatus.currentJob?.scraped||0;
       document.getElementById('jobTotal').textContent = scraperStatus.currentJob?.total||'...';
     } else {
@@ -280,8 +335,33 @@ async function checkVpnStatus() {
   } catch(e) {}
 }
 
-loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus();
-setInterval(()=>{if(scraperStatus?.isScraping){checkStatus();loadStats();}checkVpnStatus();},2000);
+async function loadCategoryFilter() {
+  try {
+    const res = await fetch(API+'/api/categories/tree');
+    const cats = await res.json();
+    const select = document.getElementById('categoryFilter');
+    const grouped = {};
+    cats.forEach(c => {
+      const main = c.category||'Other';
+      if(!grouped[main]) grouped[main]=[];
+      if(c.subsubcategory&&!grouped[main].includes(c.subsubcategory)) grouped[main].push(c.subsubcategory);
+    });
+    Object.keys(grouped).sort().forEach(main => {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = main;
+      grouped[main].sort().forEach(sub => {
+        const opt = document.createElement('option');
+        opt.value = sub;
+        opt.textContent = sub;
+        optgroup.appendChild(opt);
+      });
+      select.appendChild(optgroup);
+    });
+  } catch(e) { console.error(e); }
+}
+
+loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter();
+setInterval(()=>{if(scraperStatus&&scraperStatus.isScraping){checkStatus();loadStats();}checkVpnStatus();},2000);
 document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter')loadProducts(1)});
 </script>
 </body>
