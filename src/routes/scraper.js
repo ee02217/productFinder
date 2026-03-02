@@ -137,7 +137,7 @@ function parsePrice(priceStr) {
 
 // Extract product data - accepts category info from listing page
 async function extractProductData(page, categoryInfo = null) {
-  const currentUrl = page.url;
+  const currentUrl = page.url || '';
   const result = await page.evaluate((url, catInfo) => {
     const eanMatch = document.body.innerHTML.match(/ean=([0-9]{13})/);
     const nameEl = document.querySelector('h1');
@@ -153,6 +153,49 @@ async function extractProductData(page, categoryInfo = null) {
     })).filter(img => img.width > 100);
     const productImg = withSize.find(img => img.alt && img.alt.length > 5) || withSize[0];
     const imgSrc = productImg ? productImg.src : null;
+    
+    // Extract breadcrumbs from product page
+    let breadcrumbs = [];
+    
+    // Look for breadcrumb navigation - be specific
+    const breadcrumbNav = document.querySelector('nav[aria-label="Breadcrumb"]');
+    if (breadcrumbNav) {
+      const links = breadcrumbNav.querySelectorAll('a, span');
+      const items = Array.from(links).map(el => el.textContent.trim()).filter(t => t.length > 0 && t.length < 60);
+      // Filter out "Página inicial" and home-related text, and partial category names
+      const filtered = items.filter(t => 
+        !t.toLowerCase().includes('página inicial') && 
+        !t.toLowerCase().includes('home') &&
+        t !== 'Arroz' && t !== 'Massa' && t !== 'Farinha'  // Skip partial matches
+      );
+      // Keep unique in order - take first 3
+      const unique = [];
+      for (const item of filtered) {
+        if (!unique.includes(item)) unique.push(item);
+        if (unique.length >= 3) break;
+      }
+      breadcrumbs = unique;
+    }
+    
+    // If no breadcrumbs found, try to extract from category links in page
+    if (breadcrumbs.length < 2) {
+      const categoryLinks = document.querySelectorAll('a[href*="/mercearia/"], a[href*="/frescos/"], a[href*="/laticinios"], a[href*="/congelados/"], a[href*="/bebidas"]');
+      const linkBreadcrumbs = [];
+      categoryLinks.forEach(a => {
+        const text = a.textContent.trim();
+        // Skip partial category names
+        if (text.length > 5 && text.length < 50 && 
+            text !== 'Arroz' && text !== 'Massa' && text !== 'Farinha' &&
+            !linkBreadcrumbs.includes(text)) {
+          linkBreadcrumbs.push(text);
+        }
+      });
+      if (linkBreadcrumbs.length >= 2) {
+        breadcrumbs = linkBreadcrumbs.slice(0, 3);
+      }
+    }
+    
+    console.log('BREADCRUMBS DEBUG:', JSON.stringify(breadcrumbs));
     
     // Get all text content
     let text = document.body.innerText;
@@ -255,42 +298,47 @@ async function extractProductData(page, categoryInfo = null) {
     
     const mainCategories = ['mercearia', 'frescos', 'laticinios-e-ovos', 'congelados', 'bebidas-e-garrafeira'];
     
-    let productCategory = null, productSubcategory = null, productSubsubcategory = null;
-    
     // Use category info from listing page if available
     // catInfo is passed as second argument to evaluate
     const catPath = catInfo && catInfo.category ? catInfo.category : '';
     
-    // Use category info from listing page if available
+    // Use the listing category info - this is reliable
+    // catInfo contains the category path like "mercearia/arroz-massa-e-farinha"
+    let productCategory = null, productSubcategory = null, productSubsubcategory = null;
+    
     if (catPath && catPath.includes('/')) {
-      // It's a subcategory path like "mercearia/arroz-massa-e-farinha"
       const parts = catPath.split('/');
-      // Use simple mapping for main categories
-      const mainCatMap = {
+      // Map URL path to display names
+      const pathToName = {
         'mercearia': 'Mercearia',
         'frescos': 'Frescos',
         'laticinios-e-ovos': 'Laticínios',
         'congelados': 'Congelados',
-        'bebidas-e-garrafeira': 'Bebidas'
+        'bebidas-e-garrafeira': 'Bebidas',
+        'arroz-massa-e-farinha': 'Arroz, Massa e Farinha',
+        'farinha-e-pao-ralado': 'Farinha e Pão Ralado',
+        'frutas': 'Frutas',
+        'legumes': 'Legumes',
+        'peixaria': 'Peixaria',
+        'talho': 'Talho',
+        'charcutaria': 'Charcutaria',
+        'queijos': 'Queijos',
+        'leite': 'Leite',
+        'iogurtes': 'Iogurtes',
+        'gelados': 'Gelados',
       };
-      productCategory = mainCatMap[parts[0]] || parts[0];
-      productSubcategory = parts.slice(1).join(' ').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    } else if (catPath) {
-      // Simple category like "mercearia"
-      productCategory = categoryMap[catPath] || catPath;
-    } else if (!pageUrl.includes('/pesquisa/')) {
-      // Fallback: try to extract from product URL
-      const pathParts = pageUrl.split('/').filter(p => p && !p.includes('?') && !p.includes('.html'));
-      let currentMain = null;
-      for (const part of pathParts) {
-        if (mainCategories.includes(part)) {
-          currentMain = categoryMap[part];
-          productCategory = currentMain;
-        } else if (categoryMap[part] && currentMain) {
-          productSubcategory = part.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        } else if (currentMain && productSubcategory && !productSubsubcategory) {
-          productSubsubcategory = part.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        }
+      
+      // First part is main category
+      if (parts[0] && pathToName[parts[0]]) {
+        productCategory = pathToName[parts[0]];
+      }
+      // Second part is subcategory
+      if (parts[1] && pathToName[parts[1]]) {
+        productSubcategory = pathToName[parts[1]];
+      }
+      // Third part is subsubcategory
+      if (parts[2] && pathToName[parts[2]]) {
+        productSubsubcategory = pathToName[parts[2]];
       }
     }
     
@@ -302,6 +350,7 @@ async function extractProductData(page, categoryInfo = null) {
       category: productCategory,
       subcategory: productSubcategory,
       subsubcategory: productSubsubcategory,
+      breadcrumbs: breadcrumbs,
       price: unitPrice || null,
       pricePerKg: pricePerKg || null,
       pvp: pvpPrice || null,
@@ -438,6 +487,7 @@ async function scrapeCategory(category, limit, delayMs) {
           }
           
           const data = await extractProductData(page, { category: category.name, label: category.label });
+          console.log('EXTRACTED breadcrumbs:', JSON.stringify(data.breadcrumbs), 'category:', data.category, 'sub:', data.subcategory, 'subsub:', data.subsubcategory);
 
           if (data.ean && data.name) {
             // Upsert product

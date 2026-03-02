@@ -56,6 +56,18 @@
     .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .job-status { margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; }
+    .tab { padding: 0.5rem 1rem; border: none; background: none; cursor: pointer; font-size: 1rem; color: #666; border-bottom: 2px solid transparent; }
+    .tab:hover { color: #333; }
+    .tab.active { color: #4CAF50; border-bottom-color: #4CAF50; font-weight: 500; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .category-tree { font-size: 0.9rem; }
+    .category-tree ul { list-style: none; padding-left: 1rem; }
+    .category-tree li { padding: 0.25rem 0; }
+    .category-tree .level-1 { font-weight: 600; }
+    .category-tree .level-2 { color: #666; }
+    .category-tree .level-3 { color: #999; font-size: 0.85rem; }
   </style>
 </head>
 <body>
@@ -68,82 +80,109 @@
   </div>
   
   <div class="container">
-    <div class="card">
-      <h2>📊 Statistics</h2>
-      <div class="stats">
-        <div class="stat"><div class="stat-value" id="totalProducts">-</div><div class="stat-label">Total Products</div></div>
-        <div class="stat"><div class="stat-value" id="totalPrices">-</div><div class="stat-label">Price Records</div></div>
-        <div class="stat"><div class="stat-value" id="lastScrape">-</div><div class="stat-label">Last Scrape</div></div>
-      </div>
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('products')">📦 Products</button>
+      <button class="tab" onclick="showTab('scrape')">🚀 Scrape</button>
+      <button class="tab" onclick="showTab('categories')">📂 Categories</button>
+      <button class="tab" onclick="showTab('settings')">⚙️ Settings</button>
     </div>
     
-    <div class="card">
-      <h2>⚙️ Settings</h2>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Delay (ms)</label>
-          <input type="number" id="delayInput" value="2000" min="500" max="10000" style="width:120px;">
+    <!-- Products Tab -->
+    <div id="tab-products" class="tab-content active">
+      <div class="card">
+        <h2>📊 Statistics</h2>
+        <div class="stats">
+          <div class="stat"><div class="stat-value" id="totalProducts">-</div><div class="stat-label">Total Products</div></div>
+          <div class="stat"><div class="stat-value" id="totalPrices">-</div><div class="stat-label">Price Records</div></div>
+          <div class="stat"><div class="stat-value" id="lastScrape">-</div><div class="stat-label">Last Scrape</div></div>
         </div>
-        <button class="btn btn-secondary" onclick="saveSettings()">Save</button>
-        <span id="settingsSaved" style="color:green;display:none;">✓ Saved!</span>
       </div>
-    </div>
-    
-    <div class="card">
-      <h2>🚀 Scrape Products</h2>
-      <div class="form-row">
-        <button class="btn btn-secondary" onclick="discoverCategories()">🔍 Discover Categories</button>
-        <span id="categoryStatus"></span>
-      </div>
-      <div id="discoverResults" style="display:none; margin-bottom:1rem;">
-        <select id="discoverSelect" style="width:100%; padding:0.5rem; margin-bottom:0.5rem;">
-          <option value="">Select category...</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Category</label>
-          <select id="categorySelect">
-            <option value="mercearia">Mercearia</option>
-            <option value="frescos-frutas">Frescos - Frutas</option>
-            <option value="frescos-legumes">Frescos - Legumes</option>
-            <option value="frescos-talho">Frescos - Talho</option>
-            <option value="frescos-peixaria">Frescos - Peixaria</option>
-            <option value="laticinios">Laticínios</option>
-            <option value="congelados">Congelados</option>
-            <option value="bebidas">Bebidas</option>
+      
+      <div class="card">
+        <h2>📦 Products</h2>
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="Search by name, brand, or EAN...">
+          <select id="categoryFilter" style="max-width:200px;">
+            <option value="">All Categories</option>
           </select>
+          <button class="btn btn-secondary" onclick="loadProducts(1)">Search</button>
         </div>
-        <div class="form-group">
-          <label>Limit</label>
-          <input type="number" id="limitInput" value="0" min="0" style="width:100px;">
-        </div>
-        <button class="btn btn-primary" id="startBtn" onclick="startScraping()">Start</button>
-        <button class="btn btn-danger" id="stopBtn" onclick="stopScraping()" disabled>Stop</button>
-      </div>
-      <div class="job-status" id="jobStatus" style="display:none;">
-        <span id="jobStatusText"></span> - Scraped: <span id="jobScraped">0</span>/<span id="jobTotal">0</span>
+        <table class="products-table">
+          <thead>
+            <tr>
+              <th>EAN</th><th>Name</th><th>Brand</th><th>Category</th><th>Subcategory</th><th>Price</th><th>Price/kg</th><th>PVP</th><th>Updated</th>
+            </tr>
+          </thead>
+          <tbody id="productsTable"><tr><td colspan="9">Loading...</td></tr></tbody>
+        </table>
+        <div class="pagination" id="pagination"></div>
       </div>
     </div>
     
-    <div class="card">
-      <h2>📦 Products</h2>
-      <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search by name, brand, or EAN...">
-        <select id="categoryFilter" style="max-width:200px;">
-          <option value="">All Categories</option>
-        </select>
-        <button class="btn btn-secondary" onclick="loadProducts(1)">Search</button>
+    <!-- Scrape Tab -->
+    <div id="tab-scrape" class="tab-content">
+      <div class="card">
+        <h2>🚀 Scrape Products</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Category (from database)</label>
+            <select id="scrapeCategorySelect" style="min-width:300px;">
+              <option value="">Loading categories...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Limit (0 = all)</label>
+            <input type="number" id="scrapeLimit" value="50" min="0" style="width:100px;">
+          </div>
+          <button class="btn btn-primary" id="startBtn" onclick="startScraping()">Start</button>
+          <button class="btn btn-danger" id="stopBtn" onclick="stopScraping()" disabled>Stop</button>
+        </div>
+        <div class="job-status" id="jobStatus" style="display:none;">
+          <span id="jobStatusText"></span> - Scraped: <span id="jobScraped">0</span>/<span id="jobTotal">0</span>
+        </div>
       </div>
-      <table class="products-table">
-        <thead>
-          <tr>
-            <th>EAN</th><th>Name</th><th>Brand</th><th>Category</th><th>Subcategory</th><th>Price</th><th>Price/kg</th><th>PVP</th><th>Updated</th>
-          </tr>
-        </thead>
-        <tbody id="productsTable"><tr><td colspan="9">Loading...</td></tr></tbody>
-      </table>
-      <div class="pagination" id="pagination"></div>
+      
+      <div class="card">
+        <h2>🔍 Test URL</h2>
+        <div class="form-row">
+          <input type="text" id="testUrl" placeholder="https://www.continente.pt/..." style="flex:1;padding:0.5rem;">
+          <button class="btn btn-secondary" onclick="testUrl()">Test</button>
+        </div>
+        <pre id="testResult" style="background:#f8f9fa;padding:1rem;overflow:auto;max-height:300px;"></pre>
+      </div>
+    </div>
+    
+    <!-- Categories Tab -->
+    <div id="tab-categories" class="tab-content">
+      <div class="card">
+        <h2>📂 Category Management</h2>
+        <div class="form-row">
+          <button class="btn btn-secondary" onclick="seedCategories()">🔄 Seed Main Categories</button>
+          <button class="btn btn-secondary" onclick="discoverSubcategories()">🔍 Discover Subcategories</button>
+          <button class="btn btn-secondary" onclick="loadCategories()">📋 Load Categories</button>
+        </div>
+        <div id="categoryStatus" style="margin-bottom:1rem;color:#666;"></div>
+      </div>
+      
+      <div class="card">
+        <h2>🌳 Category Tree</h2>
+        <div id="categoryTree" class="category-tree">Loading...</div>
+      </div>
+    </div>
+    
+    <!-- Settings Tab -->
+    <div id="tab-settings" class="tab-content">
+      <div class="card">
+        <h2>⚙️ Settings</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Delay (ms)</label>
+            <input type="number" id="delayInput" value="2000" min="500" max="10000" style="width:120px;">
+          </div>
+          <button class="btn btn-secondary" onclick="saveSettings()">Save</button>
+          <span id="settingsSaved" style="color:green;display:none;">✓ Saved!</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -167,6 +206,18 @@
 <script>
 const API = '';
 let currentPage = 1, totalPages = 1, scraperStatus = null, currentProductId = null;
+
+function showTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab[onclick="showTab(\'' + tabId + '\')"]').classList.add('active');
+  document.getElementById('tab-' + tabId).classList.add('active');
+  
+  if (tabId === 'products') loadProducts(1);
+  if (tabId === 'scrape') loadScrapeOptions();
+  if (tabId === 'categories') loadCategories();
+  if (tabId === 'settings') loadSettings();
+}
 
 async function loadSettings() {
   try {
@@ -196,28 +247,73 @@ async function loadStats() {
   } catch(e) { console.error(e); }
 }
 
-async function discoverCategories() {
-  const statusEl = document.getElementById('categoryStatus');
-  statusEl.textContent = 'Discovering...';
+async function loadScrapeOptions() {
   try {
-    const res = await fetch(API+'/api/categories/discover');
+    const res = await fetch(API+'/api/categories/options');
+    const options = await res.json();
+    const select = document.getElementById('scrapeCategorySelect');
+    select.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function seedCategories() {
+  const status = document.getElementById('categoryStatus');
+  status.textContent = 'Seeding main categories...';
+  try {
+    const res = await fetch(API+'/api/categories/seed',{method:'POST'});
     const data = await res.json();
-    if(data.discovered>0) {
-      const select = document.getElementById('discoverSelect');
-      select.innerHTML = '<option value="">Select category...</option>';
-      data.categories.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.url;
-        opt.textContent = c.name;
-        select.appendChild(opt);
-      });
-      document.getElementById('discoverResults').style.display='block';
-      statusEl.textContent = 'Found '+data.discovered+' categories!';
-    } else {
-      statusEl.textContent = 'No categories found';
-    }
+    status.textContent = 'Seeded ' + data.count + ' main categories';
+    loadCategories();
   } catch(e) {
-    statusEl.textContent = 'Error: '+e.message;
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function discoverSubcategories() {
+  const status = document.getElementById('categoryStatus');
+  status.textContent = 'Discovering subcategories for Mercearia...';
+  try {
+    const res = await fetch(API+'/api/categories/discover-subs/mercearia',{method:'POST'});
+    const data = await res.json();
+    status.textContent = 'Discovered ' + data.discovered + ' subcategories';
+    loadCategories();
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function loadCategories() {
+  const tree = document.getElementById('categoryTree');
+  tree.textContent = 'Loading...';
+  try {
+    const res = await fetch(API+'/api/categories/tree');
+    const cats = await res.json();
+    if (cats.length === 0) {
+      tree.innerHTML = '<p>No categories. Click "Seed Main Categories" to add.</p>';
+      return;
+    }
+    let html = '<ul>';
+    for (const cat of cats) {
+      html += `<li class="level-1">📁 ${cat.label} <small>(${cat.urlPath})</small></li>`;
+      if (cat.children && cat.children.length > 0) {
+        html += '<ul>';
+        for (const sub of cat.children) {
+          html += `<li class="level-2">📂 ${sub.label} <small>(${sub.urlPath})</small></li>`;
+          if (sub.children && sub.children.length > 0) {
+            html += '<ul>';
+            for (const subsub of sub.children) {
+              html += `<li class="level-3">📄 ${subsub.label}</li>`;
+            }
+            html += '</ul>';
+          }
+        }
+        html += '</ul>';
+      }
+    }
+    html += '</ul>';
+    tree.innerHTML = html;
+  } catch(e) {
+    tree.textContent = 'Error: ' + e.message;
   }
 }
 
@@ -295,8 +391,9 @@ async function deletePrice(pid) {
 }
 
 async function startScraping() {
-  const cat = document.getElementById('discoverSelect').value || document.getElementById('categorySelect').value;
-  const lim = parseInt(document.getElementById('limitInput').value);
+  const cat = document.getElementById('scrapeCategorySelect').value;
+  const lim = parseInt(document.getElementById('scrapeLimit').value);
+  if (!cat) { alert('Please select a category'); return; }
   await fetch(API+'/api/scraper/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:cat,limit:lim})});
   checkStatus();
 }
@@ -340,22 +437,11 @@ async function loadCategoryFilter() {
     const res = await fetch(API+'/api/categories/tree');
     const cats = await res.json();
     const select = document.getElementById('categoryFilter');
-    const grouped = {};
     cats.forEach(c => {
-      const main = c.category||'Other';
-      if(!grouped[main]) grouped[main]=[];
-      if(c.subsubcategory&&!grouped[main].includes(c.subsubcategory)) grouped[main].push(c.subsubcategory);
-    });
-    Object.keys(grouped).sort().forEach(main => {
-      const optgroup = document.createElement('optgroup');
-      optgroup.label = main;
-      grouped[main].sort().forEach(sub => {
-        const opt = document.createElement('option');
-        opt.value = sub;
-        opt.textContent = sub;
-        optgroup.appendChild(opt);
-      });
-      select.appendChild(optgroup);
+      const opt = document.createElement('option');
+      opt.value = c.label;
+      opt.textContent = c.label;
+      select.appendChild(opt);
     });
   } catch(e) { console.error(e); }
 }

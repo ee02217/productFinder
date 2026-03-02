@@ -56,3 +56,21 @@ model Settings {
   delayMs   Int      @default(2000)
   updatedAt DateTime @updatedAt
 }
+
+model Category {
+  id            String   @id @default(uuid())
+  name          String   // URL-friendly name: "arroz-massa-e-farinha"
+  label         String   // Display name: "Arroz, Massa e Farinha"
+  level         Int      // 1 = main, 2 = sub, 3 = subsub
+  parentId      String?
+  parent        Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children      Category[] @relation("CategoryHierarchy")
+  urlPath       String   // Full URL path: "/mercearia/arroz-massa-e-farinha/"
+  productCount  Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([name, parentId]) // Unique sibling names
+  @@index([level])
+  @@index([parentId])
+}

@@ -1,0 +1,6 @@
+Please look at the documentation of the Prisma schema for more information about these files:
+- https://pris.ly/d/migration-names
+- https://pris.ly/d/migration-source-block
+- https://pris.ly/d/migration-sql
+
+Also, note that `migration.sql` files should be valid PostgreSQL since Prisma's migrate uses PostgreSQL as the default datasource.
