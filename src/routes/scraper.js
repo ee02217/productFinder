@@ -50,7 +50,28 @@ router.post('/start', async (req, res) => {
   const settings = await prisma.settings.findUnique({ where: { id: 'default' } });
   const delayMs = settings?.delayMs || 2000;
 
-  const cat = CATEGORIES.find(c => c.name === category);
+  // Check if category is a full URL or just a name
+  let cat;
+  if (category.startsWith('http') || category.startsWith('/')) {
+    // It's a URL from discovered categories
+    const url = category.startsWith('http') ? category : `https://www.continente.pt${category}`;
+    // Extract category name from URL path
+    const pathParts = url.split('/').filter(p => p);
+    const categoryName = pathParts.find(p => 
+      p.includes('mercearia') || p.includes('frescos') || p.includes('laticinios') || 
+      p.includes('congelados') || p.includes('bebidas') || p.includes('limpeza')
+    ) || pathParts[pathParts.length - 1];
+    
+    cat = { 
+      name: categoryName, 
+      url: category.replace(/^\//, '').replace(/\/$/, ''), // Remove leading/trailing slash
+      label: pathParts[pathParts.length - 1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    };
+  } else {
+    // It's a category name
+    cat = CATEGORIES.find(c => c.name === category);
+  }
+  
   if (!cat) {
     return res.status(400).json({ error: 'Invalid category' });
   }

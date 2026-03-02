@@ -137,6 +137,28 @@
     <div class="card">
       <h2>🚀 Scrape Products</h2>
       <div class="form-row">
+        <button class="btn btn-secondary" onclick="discoverCategories()" style="margin-bottom: 0.5rem;">🔍 Discover Categories from Menu</button>
+        <span id="categoryDiscoverStatus" style="margin-left: 1rem;"></span>
+      </div>
+      <div id="discoveredCategories" style="display: none; margin-top: 1rem;">
+        <label>Discovered Categories:</label>
+        <select id="discoveredCategorySelect" style="width: 100%; padding: 0.5rem; margin-top: 0.5rem;">
+          <option value="">Select a category...</option>
+        </select>
+        <div class="form-row" style="margin-top: 1rem;">
+          <div class="form-group">
+            <label>Limit (0 = all)</label>
+            <input type="number" id="limitInput" value="0" min="0" style="width: 100px;">
+          </div>
+          <button class="btn btn-primary" id="startBtn" onclick="startScraping()">Start Scraping</button>
+          <button class="btn btn-danger" id="stopBtn" onclick="stopScraping()" disabled>Stop</button>
+        </div>
+      </div>
+      
+      <hr style="margin: 1.5rem 0;">
+      
+      <h3>Quick Categories</h3>
+      <div class="form-row">
         <div class="form-group">
           <label>Category</label>
           <select id="categorySelect">
@@ -312,6 +334,51 @@
         });
       } catch (e) {
         console.error('Failed to load categories:', e);
+      }
+    }
+
+    // Discover categories from Continente menu
+    async function discoverCategories() {
+      const statusEl = document.getElementById('categoryDiscoverStatus');
+      statusEl.textContent = 'Discovering...';
+      
+      try {
+        const res = await fetch(API + '/api/categories/discover');
+        const data = await res.json();
+        
+        if (data.discovered > 0) {
+          const select = document.getElementById('discoveredCategorySelect');
+          select.innerHTML = '<option value="">Select a category...</option>';
+          
+          // Group by main category
+          const grouped = {};
+          data.categories.forEach(c => {
+            const main = c.category || 'Other';
+            if (!grouped[main]) grouped[main] = [];
+            grouped[main].push(c);
+          });
+          
+          Object.keys(grouped).sort().forEach(main => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = main.charAt(0).toUpperCase() + main.slice(1);
+            grouped[main].forEach(c => {
+              const option = document.createElement('option');
+              option.value = c.url;
+              // Extract category from URL
+              const urlParts = c.url.split('/').filter(p => p);
+              option.textContent = c.name || urlParts[urlParts.length - 1];
+              optgroup.appendChild(option);
+            });
+            select.appendChild(optgroup);
+          });
+          
+          document.getElementById('discoveredCategories').style.display = 'block';
+          statusEl.textContent = `Found ${data.discovered} categories!`;
+        } else {
+          statusEl.textContent = 'No categories found';
+        }
+      } catch (e) {
+        statusEl.textContent = 'Error: ' + e.message;
       }
     }
 
@@ -591,7 +658,9 @@
 
     // Start scraping
     async function startScraping() {
-      const category = document.getElementById('categorySelect').value;
+      // Check if using discovered category
+      const discoveredUrl = document.getElementById('discoveredCategorySelect').value;
+      const category = discoveredUrl || document.getElementById('categorySelect').value;
       const limit = parseInt(document.getElementById('limitInput').value);
       
       try {
