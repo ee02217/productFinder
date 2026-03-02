@@ -64,7 +64,8 @@ router.post('/start', async (req, res) => {
     
     cat = { 
       name: categoryName, 
-      url: category.replace(/^\//, '').replace(/\/$/, ''), // Remove leading/trailing slash
+      // Ensure URL always has leading slash
+      url: '/' + category.replace(/^\/+/, '').replace(/\/+$/, ''),
       label: pathParts[pathParts.length - 1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     };
   } else {
