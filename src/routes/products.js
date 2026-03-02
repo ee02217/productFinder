@@ -45,6 +45,8 @@ router.get('/', async (req, res) => {
         name: p.name,
         brand: p.brand,
         category: p.category,
+        subcategory: p.subcategory,
+        subsubcategory: p.subsubcategory,
         imageUrl: p.imageUrl,
         currentPrice: p.prices[0]?.priceCents,
         currentPricePerKg: p.prices[0]?.pricePerKgCents,
@@ -152,7 +154,7 @@ router.get('/meta/stats', async (req, res) => {
 // Update product
 router.put('/:id', async (req, res) => {
   try {
-    const { name, brand, category, imageUrl } = req.body;
+    const { name, brand, category, subcategory, subsubcategory, imageUrl } = req.body;
     
     const product = await prisma.product.update({
       where: { id: req.params.id },
@@ -160,6 +162,8 @@ router.put('/:id', async (req, res) => {
         ...(name && { name }),
         ...(brand !== undefined && { brand }),
         ...(category !== undefined && { category }),
+        ...(subcategory !== undefined && { subcategory }),
+        ...(subsubcategory !== undefined && { subsubcategory }),
         ...(imageUrl !== undefined && { imageUrl }),
       },
     });

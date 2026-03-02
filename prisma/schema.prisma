@@ -13,6 +13,8 @@ model Product {
   name        String
   brand       String?
   category    String?
+  subcategory String?
+  subsubcategory String?
   imageUrl    String?
   source      String   @default("continente")
   createdAt   DateTime @default(now())

@@ -272,7 +272,7 @@ async function scrapeCategory(category, limit, delayMs) {
   let scraped = 0;
   let errors = 0;
   let productLinks = [];
-  const maxPages = limit > 0 ? Math.ceil(limit / pageSize) : 50; // Default max 50 pages
+  const maxPages = limit > 0 ? Math.ceil(limit / pageSize) : 150; // Default max 150 pages (~7,200 products)
 
   // Scrape as we discover links (streaming)
   for (let pageNum = 1; pageNum <= maxPages && isScraping; pageNum++) {
@@ -406,3 +406,8 @@ async function scrapeCategory(category, limit, delayMs) {
 
   await browser.close();
   console.log(`Completed scrape: ${scraped} products, ${errors} errors`);
+
+}
+
+module.exports = router;
+
