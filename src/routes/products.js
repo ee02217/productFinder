@@ -54,6 +54,7 @@ router.get('/', async (req, res) => {
         imageUrl: p.imageUrl,
         currentPrice: p.prices[0]?.priceCents,
         currentPricePerKg: p.prices[0]?.pricePerKgCents,
+        currentPriceUnit: p.prices[0]?.priceUnit,
         currentPvp: p.prices[0]?.pvpCents,
         lastUpdated: p.updatedAt,
       })),

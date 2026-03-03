@@ -421,4 +421,25 @@ router.post('/discover-subs/:mainCategory', async (req, res) => {
   }
 });
 
+// Get scrape options - subcategories only (level 2)
+router.get('/scrape-options', async (req, res) => {
+  try {
+    const categories = await prisma.category.findMany({
+      where: { level: 2 },
+      include: { parent: true },
+      orderBy: [{ parent: { label: 'asc' } }, { label: 'asc' }],
+    });
+
+    const options = categories.map(c => ({
+      value: c.urlPath,
+      label: c.parent ? `${c.parent.label} > ${c.label}` : c.label,
+    }));
+
+    res.json(options);
+  } catch (error) {
+    console.error('Error fetching scrape options:', error);
+    res.status(500).json({ error: 'Failed to fetch scrape options' });
+  }
+});
+
 module.exports = router;

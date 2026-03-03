@@ -49,6 +49,239 @@ router.get('/status', (req, res) => {
   });
 });
 
+// Get queue (all jobs)
+router.get('/queue', async (req, res) => {
+  try {
+    const jobs = await prisma.scrapeJob.findMany({
+      orderBy: { startedAt: 'desc' },
+      take: 50,
+    });
+    res.json(jobs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add to queue (creates pending jobs without starting)
+router.post('/queue', async (req, res) => {
+  try {
+    const { categories, limit = 50 } = req.body;
+    if (!categories || !Array.isArray(categories)) {
+      return res.status(400).json({ error: 'categories array required' });
+    }
+
+    const parsedLimit = Number.isFinite(parseInt(limit, 10)) ? parseInt(limit, 10) : 50;
+    const settings = await prisma.settings.findUnique({ where: { id: 'default' } });
+    const delayMs = settings?.delayMs || 2000;
+
+    // Create pending jobs for each category
+    const jobs = [];
+    for (const cat of categories) {
+      const job = await prisma.scrapeJob.create({
+        data: {
+          category: cat.value,
+          label: cat.label,
+          limit: parsedLimit,
+          status: 'pending',
+          delayMs,
+        },
+      });
+      jobs.push(job);
+    }
+    
+    // Trigger queue processor if not already running
+    if (!isScraping) {
+      processQueue();
+    }
+    
+    res.json({ jobs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Process queue - pick up pending jobs
+async function processQueue() {
+  if (isScraping) return;
+  
+  const nextJob = await prisma.scrapeJob.findFirst({
+    where: { status: 'pending' },
+    orderBy: { startedAt: 'asc' },
+  });
+  
+  if (!nextJob) return; // No pending jobs
+  
+  isScraping = true;
+  currentJob = nextJob;
+  
+  // Update status to running
+  await prisma.scrapeJob.update({
+    where: { id: nextJob.id },
+    data: { status: 'running' },
+  });
+  
+  // Get category info and run scrape
+  let cat;
+  const category = nextJob.category;
+  const pathToName = {
+    'mercearia': 'Mercearia', 'frescos': 'Frescos', 'laticinios-e-ovos': 'Laticínios',
+    'congelados': 'Congelados', 'bebidas-e-garrafeira': 'Bebidas E Garrafeira', 
+    'limpeza': 'Limpeza', 'higiene': 'Higiene', 'bebe': 'Bebé', 
+    'animais': 'Animais', 'bio-e-saudavel': 'Bio e Saudável',
+    'cao': 'Cão', 'gato': 'Gato', 'frutas': 'Frutas', 'legumes': 'Legumes',
+    'peixaria': 'Peixaria', 'talho': 'Talho', 'charcutaria': 'Charcutaria', 'queijos': 'Queijos',
+    'leite': 'Leite', 'iogurtes': 'Iogurtes', 'gelados': 'Gelados',
+  };
+  
+  if (category.includes('/')) {
+    const cleanPath = category.replace(/^\/+/, '').replace(/\/+$/, '');
+    const parts = cleanPath.split('/');
+    const mainCatKey = parts[0];
+    const mainCatName = pathToName[mainCatKey] || mainCatKey.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const subCatName = parts[1] ? (pathToName[parts[1]] || parts[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) : mainCatName;
+    cat = {
+      name: cleanPath,
+      url: '/' + cleanPath + '/',
+      label: subCatName,
+      mainCategory: mainCatName,
+    };
+  } else {
+    cat = CATEGORIES.find(c => c.name === category) || { name: category, label: category, url: '/' + category + '/' };
+  }
+  
+  try {
+    await scrapeCategory(cat, nextJob.limit || 0, nextJob.delayMs);
+    // Mark as completed
+    await prisma.scrapeJob.update({
+      where: { id: nextJob.id },
+      data: { status: 'completed', completedAt: new Date() },
+    });
+  } catch (err) {
+    await prisma.scrapeJob.update({
+      where: { id: nextJob.id },
+      data: { status: 'failed', completedAt: new Date() },
+    });
+  }
+  
+  isScraping = false;
+  currentJob = null;
+  
+  // Process next in queue
+  processQueue();
+}
+
+// Scrape a single product URL (debug / targeted refresh)
+router.post('/product', async (req, res) => {
+  if (isScraping) {
+    return res.status(400).json({ error: 'Scraping already in progress' });
+  }
+
+  const { url, categoryPath } = req.body || {};
+  if (!url || typeof url !== 'string' || !url.startsWith('https://www.continente.pt/produto/')) {
+    return res.status(400).json({ error: 'Invalid url (must start with https://www.continente.pt/produto/)' });
+  }
+
+  const browser = await puppeteer.launch({
+    executablePath: CHROME_PATH,
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 90000 });
+
+    const data = await extractProductData(page, categoryPath ? { category: categoryPath, label: '' } : null);
+
+    if (!data?.ean) {
+      return res.status(500).json({ error: 'Failed to extract EAN from product page' });
+    }
+
+    const product = await prisma.product.upsert({
+      where: { ean: data.ean },
+      create: {
+        ean: data.ean,
+        name: data.name || 'Unknown',
+        brand: data.brand,
+        category: data.category,
+        subcategory: data.subcategory,
+        subsubcategory: data.subsubcategory,
+        imageUrl: data.imageUrl,
+        source: 'continente',
+      },
+      update: {
+        name: data.name || undefined,
+        brand: data.brand || undefined,
+        imageUrl: data.imageUrl || undefined,
+        ...(data.category ? { category: data.category } : {}),
+        ...(data.subcategory ? { subcategory: data.subcategory } : {}),
+        ...(data.subsubcategory ? { subsubcategory: data.subsubcategory } : {}),
+      },
+    });
+
+    if (data.price) {
+      const latestPrice = await prisma.price.findFirst({
+        where: { productId: product.id },
+        orderBy: { capturedAt: 'desc' },
+      });
+
+      const newPriceCents = parsePrice(data.price);
+      const newPricePerKgCents = data.pricePerKg ? parsePrice(data.pricePerKg) : null;
+      const newPriceUnit = data.priceUnit; // 'kg' or 'l' or null
+      const newPvpCents = data.pvp ? parsePrice(data.pvp) : null;
+
+      if (latestPrice) {
+        const samePrice = latestPrice.priceCents === newPriceCents;
+        const samePer = (latestPrice.pricePerKgCents ?? null) === newPricePerKgCents;
+        const samePvp = (latestPrice.pvpCents ?? null) === newPvpCents;
+        const sameUnit = (latestPrice.priceUnit ?? null) === newPriceUnit;
+
+        if (samePrice && samePer && samePvp && sameUnit) {
+          // ignore
+        } else if (samePrice && samePvp && (latestPrice.pricePerKgCents == null) && (newPricePerKgCents != null)) {
+          await prisma.price.update({
+            where: { id: latestPrice.id },
+            data: { pricePerKgCents: newPricePerKgCents, priceUnit: newPriceUnit },
+          });
+        } else if (samePrice && samePer && (latestPrice.pvpCents == null) && (newPvpCents != null)) {
+          await prisma.price.update({
+            where: { id: latestPrice.id },
+            data: { pvpCents: newPvpCents },
+          });
+        } else {
+          await prisma.price.create({
+            data: {
+              productId: product.id,
+              priceCents: newPriceCents,
+              pricePerKgCents: newPricePerKgCents,
+              priceUnit: newPriceUnit,
+              pvpCents: newPvpCents,
+            },
+          });
+        }
+      } else {
+        await prisma.price.create({
+          data: {
+            productId: product.id,
+            priceCents: newPriceCents,
+            pricePerKgCents: newPricePerKgCents,
+            priceUnit: newPriceUnit,
+            pvpCents: newPvpCents,
+          },
+        });
+      }
+    }
+
+    res.json({ status: 'ok', productId: product.id, extracted: data });
+  } catch (err) {
+    console.error('Single product scrape error:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    await browser.close();
+  }
+});
+
 // Start scraping
 router.post('/start', async (req, res) => {
   if (isScraping) {
@@ -63,15 +296,30 @@ router.post('/start', async (req, res) => {
 
   // Check if category is a full URL, has a slash (subcategory), or just a name
   let cat;
+  // Map URL path segments to display names (including full main category names)
+  const pathToName = {
+    'mercearia': 'Mercearia', 'frescos': 'Frescos', 'laticinios-e-ovos': 'Laticínios',
+    'congelados': 'Congelados', 'bebidas-e-garrafeira': 'Bebidas E Garrafeira', 
+    'limpeza': 'Limpeza', 'higiene': 'Higiene', 'bebe': 'Bebé', 
+    'animais': 'Animais', 'bio-e-saudavel': 'Bio e Saudável',
+    'cao': 'Cão', 'gato': 'Gato', 'frutas': 'Frutas', 'legumes': 'Legumes',
+    'peixaria': 'Peixaria', 'talho': 'Talho', 'charcutaria': 'Charcutaria', 'queijos': 'Queijos',
+    'leite': 'Leite', 'iogurtes': 'Iogurtes', 'gelados': 'Gelados',
+  };
+  
   if (category.includes('/')) {
-    // It's a subcategory path like "mercearia/arroz-massa-e-farinha"
-    const parts = category.split('/');
-    const mainCat = CATEGORIES.find(c => c.name === parts[0]);
-    const subPath = parts.slice(1).join('/');
+    // It's a subcategory path like "mercearia/arroz-massa-e-farinha" or "/animais/cao"
+    const cleanPath = category.replace(/^\/+/, '').replace(/\/+$/, ''); // remove leading/trailing slashes
+    const parts = cleanPath.split('/');
+    const mainCatKey = parts[0];
+    const mainCatName = pathToName[mainCatKey] || mainCatKey.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const subCatName = parts[1] ? (pathToName[parts[1]] || parts[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) : mainCatName;
+    
     cat = {
-      name: category,
-      url: '/' + category + '/',
-      label: subPath.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      name: cleanPath,
+      url: '/' + cleanPath + '/',
+      label: subCatName,  // Just the subcategory name
+      mainCategory: mainCatName,  // Store main category separately
     };
   } else if (category.startsWith('http') || category.startsWith('/')) {
     // It's a URL from discovered categories
@@ -97,9 +345,12 @@ router.post('/start', async (req, res) => {
   }
 
   // Create job
+  const parsedLimit = Number.isFinite(parseInt(limit, 10)) ? parseInt(limit, 10) : 0;
   const job = await prisma.scrapeJob.create({
     data: {
       category: cat.name,
+      label: cat.label,
+      limit: parsedLimit,
       status: 'running',
       delayMs,
     },
@@ -109,7 +360,7 @@ router.post('/start', async (req, res) => {
   isScraping = true;
 
   // Start scraping in background
-  scrapeCategory(cat, parseInt(limit), delayMs).then(() => {
+  scrapeCategory(cat, parsedLimit, delayMs).then(() => {
     isScraping = false;
     currentJob = null;
   }).catch(err => {
@@ -195,7 +446,7 @@ async function extractProductData(page, categoryInfo = null) {
       }
     }
     
-    console.log('BREADCRUMBS DEBUG:', JSON.stringify(breadcrumbs));
+
     
     // Get all text content
     let text = document.body.innerText;
@@ -236,43 +487,62 @@ async function extractProductData(page, categoryInfo = null) {
     }
     text = fixedLines.join(' ');
     
-    // Find all price positions
-    const priceMatches = [...text.matchAll(/(\d+[\s,]\d{2})\s*€/g)];
-    
+    // --- Price extraction (prefer DOM selectors; fallback to text scan) ---
     let unitPrice = null;
-    let pricePerKg = null;
+    let pricePerKg = null; // semantics: "price per unit" (kg / lt) but kept for DB compatibility
+    let priceUnit = null; // 'kg' or 'l' if pricePerKg is set
     let pvpPrice = null;
-    
-    // Check each price match to determine type
-    for (const match of priceMatches) {
-      const priceValue = match[1];
-      const endPos = match.index + match[0].length;
-      // Use smaller window to check immediate context
-      const beforeText = text.substring(Math.max(0, match.index - 6), match.index).toUpperCase();
-      const afterText = text.substring(endPos, endPos + 6).toUpperCase().replace(/\s+/g, '');
-      
-      // Skip if this is a PVPR/PVP price (original price before discount)
-      if (beforeText.includes('PVPR') || beforeText.includes('PVP')) {
-        if (!pvpPrice) pvpPrice = priceValue;
-        continue;
-      }
-      
-      // Price per kg if followed by /kg AND not preceded by PVPR/PVP
-      if (afterText.startsWith('/KG')) {
-        pricePerKg = priceValue;
-      } else if (!unitPrice) {
-        // This is the unit price (first price not marked as per-kg or PVP)
-        unitPrice = priceValue;
+
+    const extractPriceNumber = (s) => {
+      if (!s) return null;
+      const m = String(s).match(/(\d+[,\.]\d{2})/);
+      return m ? m[1].replace('.', ',') : null;
+    };
+
+    // 1) Primary/secondary price blocks (most reliable)
+    unitPrice = extractPriceNumber(document.querySelector('.pwc-tile--price-primary')?.textContent);
+    const secondaryText = document.querySelector('.pwc-tile--price-secondary')?.textContent || '';
+    pricePerKg = extractPriceNumber(secondaryText);
+    // Determine unit (kg or l)
+    if (secondaryText.toLowerCase().includes('/kg')) priceUnit = 'kg';
+    else if (secondaryText.toLowerCase().includes('/l') || secondaryText.toLowerCase().includes('/lt')) priceUnit = 'l';
+
+    // PVPR/original price
+    const pvprText = document.querySelector('.prices-wrapper .list')?.textContent;
+    const pvprMatch = pvprText ? pvprText.match(/PVPR\s*(\d+[,\.]\d{2})\s*€/i) : null;
+    if (pvprMatch) pvpPrice = pvprMatch[1].replace('.', ',');
+
+    // 2) Fallback: scan normalized text
+    if (!unitPrice || (!pricePerKg && !pvpPrice)) {
+      const priceMatches = [...text.matchAll(/(\d+[\s,]\d{2})\s*€/g)];
+      for (const match of priceMatches) {
+        const priceValue = match[1];
+        const endPos = match.index + match[0].length;
+        const beforeText = text.substring(Math.max(0, match.index - 10), match.index).toUpperCase();
+        const afterText = text.substring(endPos, endPos + 15).toUpperCase().replace(/\s+/g, '');
+
+        if (beforeText.includes('PVPR') || beforeText.includes('PVP')) {
+          if (!pvpPrice) pvpPrice = priceValue;
+          continue;
+        }
+
+        const afterClean = afterText.replace(/€/g, '');
+        if (afterClean.includes('/KG') || afterClean.includes('/L') || afterClean.includes('/LT')) {
+          if (!pricePerKg) pricePerKg = priceValue;
+          if (!priceUnit) {
+            if (afterClean.includes('/KG')) priceUnit = 'kg';
+            else if (afterClean.includes('/LT')) priceUnit = 'l';
+            else if (afterClean.includes('/L')) priceUnit = 'l';
+          }
+          if (!unitPrice) unitPrice = priceValue;
+        } else if (!unitPrice) {
+          unitPrice = priceValue;
+        }
       }
     }
-    
-    // If no unit price found, use the first non-PVPR price
-    if (!unitPrice && priceMatches.length > 0) {
-      unitPrice = priceMatches[0][1];
-    }
-    
-    // PVP (original price when on discount): "PVPR 3,15€"
-    const pvpMatch = text.match(/PVPR\s*(\d+[\s,]\d{2})\s*€/);
+
+    // Normalize: if we only found one value, treat it as unit price
+    if (!unitPrice && pricePerKg) unitPrice = pricePerKg;
     
     // Extract category from URL
     const pageUrl = url || '';
@@ -297,6 +567,14 @@ async function extractProductData(page, categoryInfo = null) {
     };
     
     const mainCategories = ['mercearia', 'frescos', 'laticinios-e-ovos', 'congelados', 'bebidas-e-garrafeira'];
+    
+    // Map URL path parts to display names
+    const pathToName = {
+      'mercearia': 'Mercearia', 'frescos': 'Frescos', 'laticinios-e-ovos': 'Laticínios',
+      'congelados': 'Congelados', 'bebidas-e-garrafeira': 'Bebidas', 'limpeza': 'Limpeza',
+      'higiene': 'Higiene', 'bebe': 'Bebé', 'animais': 'Animais', 'bio-e-saudavel': 'Bio e Saudável',
+      'arroz-massa-e-farinha': 'Arroz, Massa e Farinha', 'cao': 'Cão', 'gato': 'Gato',
+    };
     
     // Use category info from listing page if available
     // catInfo is passed as second argument to evaluate
@@ -353,6 +631,7 @@ async function extractProductData(page, categoryInfo = null) {
       breadcrumbs: breadcrumbs,
       price: unitPrice || null,
       pricePerKg: pricePerKg || null,
+      priceUnit: priceUnit || null,
       pvp: pvpPrice || null,
     };
   }, currentUrl, categoryInfo);
@@ -487,7 +766,7 @@ async function scrapeCategory(category, limit, delayMs) {
           }
           
           const data = await extractProductData(page, { category: category.name, label: category.label });
-          console.log('EXTRACTED breadcrumbs:', JSON.stringify(data.breadcrumbs), 'category:', data.category, 'sub:', data.subcategory, 'subsub:', data.subsubcategory);
+
 
           if (data.ean && data.name) {
             // Upsert product
@@ -497,31 +776,78 @@ async function scrapeCategory(category, limit, delayMs) {
                 ean: data.ean,
                 name: data.name,
                 brand: data.brand,
-                category: data.category || category.label,
-                subcategory: data.subcategory,
+                // Always prefer the parsed main category from URL over extracted data
+                category: category.mainCategory || data.category,
+                subcategory: category.label || data.subcategory,
                 subsubcategory: data.subsubcategory,
                 imageUrl: data.imageUrl,
               },
               update: {
                 name: data.name,
                 brand: data.brand,
-                category: data.category || category.label,
-                subcategory: data.subcategory,
+                // Always prefer the parsed main category from URL over extracted data
+                category: category.mainCategory || data.category,
+                subcategory: category.label || data.subcategory,
                 subsubcategory: data.subsubcategory,
                 imageUrl: data.imageUrl,
               },
             });
 
-            // Add price
+            // Add price only if meaningfully different from latest
             if (data.price) {
-              await prisma.price.create({
-                data: {
-                  productId: product.id,
-                  priceCents: parsePrice(data.price),
-                  pricePerKgCents: data.pricePerKg ? parsePrice(data.pricePerKg) : null,
-                  pvpCents: data.pvp ? parsePrice(data.pvp) : null,
-                },
+              const latestPrice = await prisma.price.findFirst({
+                where: { productId: product.id },
+                orderBy: { capturedAt: 'desc' },
               });
+
+              const newPriceCents = parsePrice(data.price);
+              const newPricePerKgCents = data.pricePerKg ? parsePrice(data.pricePerKg) : null;
+              const newPriceUnit = data.priceUnit; // 'kg' or 'l' or null
+              const newPvpCents = data.pvp ? parsePrice(data.pvp) : null;
+
+              if (latestPrice) {
+                const samePrice = latestPrice.priceCents === newPriceCents;
+                const samePer = (latestPrice.pricePerKgCents ?? null) === newPricePerKgCents;
+                const samePvp = (latestPrice.pvpCents ?? null) === newPvpCents;
+                const sameUnit = (latestPrice.priceUnit ?? null) === newPriceUnit;
+
+                if (samePrice && samePer && samePvp && sameUnit) {
+                  // fully duplicate → ignore
+                } else if (samePrice && samePvp && (latestPrice.pricePerKgCents == null) && (newPricePerKgCents != null)) {
+                  // data enrichment (we previously failed to capture per-unit price)
+                  await prisma.price.update({
+                    where: { id: latestPrice.id },
+                    data: { pricePerKgCents: newPricePerKgCents, priceUnit: newPriceUnit },
+                  });
+                } else if (samePrice && samePer && (latestPrice.pvpCents == null) && (newPvpCents != null)) {
+                  // data enrichment (we previously failed to capture PVPR)
+                  await prisma.price.update({
+                    where: { id: latestPrice.id },
+                    data: { pvpCents: newPvpCents },
+                  });
+                } else {
+                  // real change (or ambiguous) → create new history row
+                  await prisma.price.create({
+                    data: {
+                      productId: product.id,
+                      priceCents: newPriceCents,
+                      pricePerKgCents: newPricePerKgCents,
+                      priceUnit: newPriceUnit,
+                      pvpCents: newPvpCents,
+                    },
+                  });
+                }
+              } else {
+                await prisma.price.create({
+                  data: {
+                    productId: product.id,
+                    priceCents: newPriceCents,
+                    pricePerKgCents: newPricePerKgCents,
+                    priceUnit: newPriceUnit,
+                    pvpCents: newPvpCents,
+                  },
+                });
+              }
             }
 
             scraped++;

@@ -110,10 +110,10 @@
         <table class="products-table">
           <thead>
             <tr>
-              <th>EAN</th><th>Name</th><th>Brand</th><th>Category</th><th>Subcategory</th><th>Price</th><th>Price/kg</th><th>PVP</th><th>Updated</th>
+              <th>EAN</th><th>Name</th><th>Brand</th><th>Category</th><th>Subcategory</th><th>Price</th><th>Price/kg/l</th><th>PVP</th><th>Updated</th>
             </tr>
           </thead>
-          <tbody id="productsTable"><tr><td colspan="9">Loading...</td></tr></tbody>
+          <tbody id="productsTable"><tr><td colspan="10">Loading...</td></tr></tbody>
         </table>
         <div class="pagination" id="pagination"></div>
       </div>
@@ -126,9 +126,7 @@
         <div class="form-row">
           <div class="form-group">
             <label>Category (from database)</label>
-            <select id="scrapeCategorySelect" style="min-width:300px;">
-              <option value="">Loading categories...</option>
-            </select>
+            <div id="scrapeCategoryList" style="max-height:300px;overflow-y:auto;border:1px solid #ddd;padding:0.5rem;">Loading categories...</div>
           </div>
           <div class="form-group">
             <label>Limit (0 = all)</label>
@@ -139,6 +137,13 @@
         </div>
         <div class="job-status" id="jobStatus" style="display:none;">
           <span id="jobStatusText"></span> - Scraped: <span id="jobScraped">0</span>/<span id="jobTotal">0</span>
+        </div>
+        <div id="scrapeResults" style="margin-top:1rem;">
+          <h3>Scrape Queue</h3>
+          <table class="products-table">
+            <thead><tr><th>Category</th><th>Limit</th><th>Status</th><th>Scraped</th><th>Errors</th></tr></thead>
+            <tbody id="scrapeResultsBody"><tr><td colspan="5">Select categories and click Start</td></tr></tbody>
+          </table>
         </div>
       </div>
       
@@ -157,16 +162,26 @@
       <div class="card">
         <h2>📂 Category Management</h2>
         <div class="form-row">
-          <button class="btn btn-secondary" onclick="seedCategories()">🔄 Seed Main Categories</button>
-          <button class="btn btn-secondary" onclick="discoverSubcategories()">🔍 Discover Subcategories</button>
-          <button class="btn btn-secondary" onclick="loadCategories()">📋 Load Categories</button>
+          <button class="btn btn-secondary" onclick="seedCategories()">🔄 Seed Main</button>
+          <button class="btn btn-primary" onclick="seedFullCategories()">🔄 Seed FULL Menu</button>
+          <button class="btn btn-secondary" onclick="loadCategories()">📋 Load</button>
         </div>
         <div id="categoryStatus" style="margin-bottom:1rem;color:#666;"></div>
       </div>
       
       <div class="card">
-        <h2>🌳 Category Tree</h2>
-        <div id="categoryTree" class="category-tree">Loading...</div>
+        <h2>📊 Categories Table</h2>
+        <table class="products-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Sub Category</th>
+              <th>URL Path</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="categoriesTable"><tr><td colspan="5">Loading...</td></tr></tbody>
+        </table>
       </div>
     </div>
     
@@ -197,7 +212,7 @@
       <button class="btn btn-danger" onclick="deleteProduct()">Delete Product</button>
       <h3 style="margin-top:1rem;">Price History</h3>
       <table class="price-table">
-        <thead><tr><th>Date</th><th>Price</th><th>Price/kg</th><th>PVP</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Price</th><th>Price/kg/l</th><th>PVP</th><th></th></tr></thead>
         <tbody id="priceHistoryTable"></tbody>
       </table>
     </div>
@@ -249,10 +264,12 @@ async function loadStats() {
 
 async function loadScrapeOptions() {
   try {
-    const res = await fetch(API+'/api/categories/options');
+    const res = await fetch(API+'/api/categories/scrape-options');
     const options = await res.json();
-    const select = document.getElementById('scrapeCategorySelect');
-    select.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    const container = document.getElementById('scrapeCategoryList');
+    container.innerHTML = options.map(o => 
+      `<label style="display:block;padding:4px 0;"><input type="checkbox" value="${o.value}"> ${o.label}</label>`
+    ).join('');
   } catch(e) { console.error(e); }
 }
 
@@ -283,38 +300,78 @@ async function discoverSubcategories() {
 }
 
 async function loadCategories() {
-  const tree = document.getElementById('categoryTree');
-  tree.textContent = 'Loading...';
+  const tbody = document.getElementById('categoriesTable');
+  tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
   try {
-    const res = await fetch(API+'/api/categories/tree');
-    const cats = await res.json();
-    if (cats.length === 0) {
-      tree.innerHTML = '<p>No categories. Click "Seed Main Categories" to add.</p>';
+    const res = await fetch(API+'/api/categories');
+    const allCats = await res.json();
+    if (allCats.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4">No categories. Click "Seed Main Categories" to add.</td></tr>';
       return;
     }
-    let html = '<ul>';
-    for (const cat of cats) {
-      html += `<li class="level-1">📁 ${cat.label} <small>(${cat.urlPath})</small></li>`;
-      if (cat.children && cat.children.length > 0) {
-        html += '<ul>';
-        for (const sub of cat.children) {
-          html += `<li class="level-2">📂 ${sub.label} <small>(${sub.urlPath})</small></li>`;
-          if (sub.children && sub.children.length > 0) {
-            html += '<ul>';
-            for (const subsub of sub.children) {
-              html += `<li class="level-3">📄 ${subsub.label}</li>`;
-            }
-            html += '</ul>';
-          }
-        }
-        html += '</ul>';
+    // Build hierarchy map
+    const catMap = {};
+    allCats.forEach(c => { c.subs = []; catMap[c.id] = c; });
+    allCats.forEach(c => {
+      if (c.parentId && catMap[c.parentId]) catMap[c.parentId].subs.push(c);
+    });
+    const roots = allCats.filter(c => !c.parentId);
+    let html = '';
+    roots.forEach(root => {
+      root.subs = root.subs || [];
+      root.subs.forEach(sub => {
+        html += '<tr><td>'+root.label+'</td><td>'+sub.label+'</td><td>'+sub.urlPath+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+sub.id+'\')">X</button></td></tr>';
+      });
+      if (root.subs.length === 0) {
+        html += '<tr><td>'+root.label+'</td><td>-</td><td>'+root.urlPath+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+root.id+'\')">X</button></td></tr>';
       }
-    }
-    html += '</ul>';
-    tree.innerHTML = html;
+    });
+    tbody.innerHTML = html || '<tr><td colspan="4">No categories</td></tr>';
   } catch(e) {
-    tree.textContent = 'Error: ' + e.message;
+    tbody.innerHTML = '<tr><td colspan="5">Error: '+e.message+'</td></tr>';
   }
+}
+
+async function deleteCategory(id) {
+  if (!confirm('Delete this category?')) return;
+  try {
+    await fetch(API+'/api/categories/'+id, { method: 'DELETE' });
+    loadCategories();
+  } catch(e) { alert('Error: '+e.message); }
+}
+
+async function seedSubSubCategories() {
+  const status = document.getElementById('categoryStatus');
+  status.textContent = 'Seeding sub-sub categories...';
+  try {
+    const res = await fetch(API+'/api/categories/seed-subsubs',{method:'POST'});
+    const data = await res.json();
+    status.textContent = 'Seeded '+(data.count||0)+' sub-sub categories';
+    loadCategories();
+  } catch(e) { status.textContent = 'Error: '+e.message; }
+}
+
+async function scrapeMenu() {
+  const status = document.getElementById('categoryStatus');
+  status.textContent = 'Scraping menu from Continente (this may take a while)...';
+  try {
+    const res = await fetch(API+'/api/categories/scrape-menu',{method:'POST'});
+    const data = await res.json();
+    status.textContent = 'Scraped '+(data.added||0)+' categories from menu';
+    loadCategories();
+  } catch(e) { status.textContent = 'Error: '+e.message; }
+}
+
+async function seedFullCategories() {
+  const status = document.getElementById('categoryStatus');
+  if (!confirm('This will replace ALL categories with the full menu. Continue?')) return;
+  status.textContent = 'Seeding full category menu...';
+  try {
+    const res = await fetch(API+'/api/categories/seed-full',{method:'POST'});
+    const data = await res.json();
+    status.textContent = 'Seeded '+(data.count||0)+' categories';
+    loadCategories();
+  } catch(e) { status.textContent = 'Error: '+e.message; }
 }
 
 async function loadProducts(page=1) {
@@ -325,10 +382,10 @@ async function loadProducts(page=1) {
     const res = await fetch(API+'/api/products?page='+page+'&limit=50&search='+encodeURIComponent(search)+'&category='+encodeURIComponent(catFilter));
     const data = await res.json();
     const tbody = document.getElementById('productsTable');
-    if(!data.products.length) { tbody.innerHTML='<tr><td colspan="9">No products found</td></tr>'; }
+    if(!data.products.length) { tbody.innerHTML='<tr><td colspan="10">No products found</td></tr>'; }
     else {
       tbody.innerHTML = data.products.map(p => 
-        '<tr onclick="showProductDetails(\''+p.id+'\')"><td><code>'+(p.ean||'-')+'</code></td><td>'+(p.name||'-')+'</td><td>'+(p.brand||'-')+'</td><td>'+(p.category||'-')+'</td><td>'+(p.subcategory||'-')+'</td><td class="price">'+(p.currentPrice?(p.currentPrice/100).toFixed(2)+' €':'-')+'</td><td>'+(p.currentPricePerKg?(p.currentPricePerKg/100).toFixed(2)+' €/kg':'-')+'</td><td>'+(p.currentPvp?'<span class="original-price">'+(p.currentPvp/100).toFixed(2)+' €</span>':'-')+'</td><td>'+new Date(p.lastUpdated).toLocaleDateString()+'</td></tr>'
+        '<tr onclick="showProductDetails(\''+p.id+'\')"><td><code>'+(p.ean||'-')+'</code></td><td>'+(p.name||'-')+'</td><td>'+(p.brand||'-')+'</td><td>'+(p.category||'-')+'</td><td>'+(p.subcategory||'-')+'</td><td class="price">'+(p.currentPrice?(p.currentPrice/100).toFixed(2)+' €':'-')+'</td><td>'+(p.currentPricePerKg?(p.currentPricePerKg/100).toFixed(2)+' €/'+(p.currentPriceUnit||'kg'):'-')+'</td><td>'+(p.currentPvp?'<span class="original-price">'+(p.currentPvp/100).toFixed(2)+' €</span>':'-')+'</td><td>'+new Date(p.lastUpdated).toLocaleDateString()+'</td></tr>'
       ).join('');
     }
     totalPages = data.pagination.pages;
@@ -359,7 +416,7 @@ async function showProductDetails(id) {
   if(!p.prices||!p.prices.length) { tbody.innerHTML='<tr><td colspan="5" class="no-history">No price history</td></tr>'; }
   else {
     tbody.innerHTML = p.prices.map(pr =>
-      '<tr><td>'+new Date(pr.capturedAt).toLocaleString()+'</td><td class="price">'+(pr.priceCents/100).toFixed(2)+' €</td><td>'+(pr.pricePerKgCents?(pr.pricePerKgCents/100).toFixed(2)+' €/kg':'-')+'</td><td>'+(pr.pvpCents?(pr.pvpCents/100).toFixed(2)+' €':'-')+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deletePrice(\''+pr.id+'\')">X</button></td></tr>'
+      '<tr><td>'+new Date(pr.capturedAt).toLocaleString()+'</td><td class="price">'+(pr.priceCents/100).toFixed(2)+' €</td><td>'+(pr.pricePerKgCents?(pr.pricePerKgCents/100).toFixed(2)+' €/'+(pr.priceUnit||'kg'):'-')+'</td><td>'+(pr.pvpCents?(pr.pvpCents/100).toFixed(2)+' €':'-')+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deletePrice(\''+pr.id+'\')">X</button></td></tr>'
     ).join('');
   }
   document.getElementById('productModal').classList.add('active');
@@ -390,12 +447,51 @@ async function deletePrice(pid) {
   showProductDetails(currentProductId);
 }
 
+let scrapeQueue = []; // Queue of categories to scrape
+
 async function startScraping() {
-  const cat = document.getElementById('scrapeCategorySelect').value;
-  const lim = parseInt(document.getElementById('scrapeLimit').value);
-  if (!cat) { alert('Please select a category'); return; }
-  await fetch(API+'/api/scraper/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:cat,limit:lim})});
-  checkStatus();
+  try {
+    const checkboxes = document.querySelectorAll('#scrapeCategoryList input[type="checkbox"]:checked');
+    const selected = Array.from(checkboxes);
+    if (selected.length === 0) { alert('Please select at least one category'); return; }
+    
+    const lim = parseInt(document.getElementById('scrapeLimit').value);
+    
+    // Build categories array with value and label
+    const categories = selected.map(c => ({ value: c.value, label: c.parentNode.textContent.trim() }));
+    
+    // Send to queue endpoint
+    const res = await fetch(API+'/api/scraper/queue', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ categories, limit: lim })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    
+    // Reload queue from server
+    loadScrapeQueue();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function loadScrapeQueue() {
+  try {
+    const res = await fetch(API+'/api/scraper/queue');
+    if (!res.ok) throw new Error('Failed to load queue');
+    const jobs = await res.json();
+    const statusIcon = { pending: '⏳', running: '🔄', completed: '✅', failed: '❌' };
+    const tbody = document.getElementById('scrapeResultsBody');
+    if (!tbody) return;
+    // Show all jobs (newest first)
+    const sortedJobs = jobs.sort((a,b) => new Date(b.startedAt) - new Date(a.startedAt));
+    tbody.innerHTML = sortedJobs.map(j => 
+      `<tr><td>${j.label || j.category}</td><td>${j.limit ?? 0}</td><td>${statusIcon[j.status] || j.status} ${j.status}</td><td>${j.scraped}</td><td>${j.errors}</td></tr>`
+    ).join('') || '<tr><td colspan="5">No scrape history - select categories and click Start</td></tr>';
+  } catch(e) { 
+    console.error(e); 
+    const tbody = document.getElementById('scrapeResultsBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5">Error loading queue</td></tr>';
+  }
 }
 
 async function stopScraping() {
@@ -446,8 +542,8 @@ async function loadCategoryFilter() {
   } catch(e) { console.error(e); }
 }
 
-loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter();
-setInterval(()=>{if(scraperStatus&&scraperStatus.isScraping){checkStatus();loadStats();}checkVpnStatus();},2000);
+loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter(); loadScrapeQueue();
+setInterval(()=>{if(scraperStatus&&scraperStatus.isScraping){checkStatus();loadStats();loadScrapeQueue();}checkVpnStatus();},2000);
 document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter')loadProducts(1)});
 </script>
 </body>
