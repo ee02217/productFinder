@@ -36,6 +36,47 @@ const BASE_URL = 'https://www.continente.pt';
 let isScraping = false;
 let currentJob = null;
 
+const PATH_TO_NAME = {
+  'mercearia': 'Mercearia', 'frescos': 'Frescos', 'laticinios-e-ovos': 'Laticínios',
+  'congelados': 'Congelados', 'bebidas-e-garrafeira': 'Bebidas E Garrafeira',
+  'limpeza': 'Limpeza', 'higiene': 'Higiene', 'bebe': 'Bebé',
+  'animais': 'Animais', 'bio-e-saudavel': 'Bio e Saudável',
+  'cao': 'Cão', 'gato': 'Gato', 'frutas': 'Frutas', 'legumes': 'Legumes',
+  'peixaria': 'Peixaria', 'talho': 'Talho', 'charcutaria': 'Charcutaria', 'queijos': 'Queijos',
+  'leite': 'Leite', 'iogurtes': 'Iogurtes', 'gelados': 'Gelados',
+};
+
+function buildCategoryDescriptor(categoryInput) {
+  let category = categoryInput || '';
+  if (category.startsWith('http')) {
+    const url = new URL(category);
+    category = url.pathname;
+  }
+
+  if (category.includes('/')) {
+    const cleanPath = category.replace(/^\/+/, '').replace(/\/+$/, '');
+    const parts = cleanPath.split('/');
+    const mainCatKey = parts[0];
+    const mainCatName = PATH_TO_NAME[mainCatKey] || mainCatKey.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const subCatName = parts[1]
+      ? (PATH_TO_NAME[parts[1]] || parts[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))
+      : mainCatName;
+
+    return {
+      name: cleanPath,
+      url: '/' + cleanPath + '/',
+      label: subCatName,
+      mainCategory: mainCatName,
+    };
+  }
+
+  return CATEGORIES.find(c => c.name === category) || {
+    name: category,
+    url: '/' + category.replace(/^\/+/, '').replace(/\/+$/, '') + '/',
+    label: category,
+  };
+}
+
 // Get categories
 router.get('/categories', (req, res) => {
   res.json(CATEGORIES);
@@ -82,6 +123,7 @@ router.post('/queue', async (req, res) => {
           category: cat.value,
           label: cat.label,
           limit: parsedLimit,
+          cursorStart: 0,
           status: 'pending',
           delayMs,
         },
@@ -95,6 +137,61 @@ router.post('/queue', async (req, res) => {
     }
     
     res.json({ jobs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Resume a specific interrupted job
+router.post('/resume/:id', async (req, res) => {
+  try {
+    if (isScraping) {
+      return res.status(400).json({ error: 'Scraper is already running' });
+    }
+
+    const job = await prisma.scrapeJob.findUnique({ where: { id: req.params.id } });
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (job.status === 'completed') {
+      return res.status(400).json({ error: 'Job already completed' });
+    }
+
+    isScraping = true;
+    currentJob = job;
+
+    const runningJob = await prisma.scrapeJob.update({
+      where: { id: job.id },
+      data: { status: 'running', completedAt: null },
+    });
+    currentJob = runningJob;
+
+    const cat = buildCategoryDescriptor(job.category);
+
+    scrapeCategory(cat, job.limit || 0, job.delayMs, {
+      startOffset: (job.cursorStart && job.cursorStart > 0)
+        ? job.cursorStart
+        : Math.floor((job.scraped || 0) / 48) * 48,
+      initialScraped: job.scraped || 0,
+      initialErrors: job.errors || 0,
+    }).then(async () => {
+      isScraping = false;
+      currentJob = null;
+      await prisma.scrapeJob.update({
+        where: { id: job.id },
+        data: { status: 'completed', completedAt: new Date() },
+      });
+      processQueue();
+    }).catch(async (err) => {
+      console.error('Resume scrape error:', err);
+      isScraping = false;
+      currentJob = null;
+      await prisma.scrapeJob.update({
+        where: { id: job.id },
+        data: { status: 'failed', completedAt: new Date() },
+      });
+      processQueue();
+    });
+
+    res.json({ status: 'resumed', jobId: job.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -121,36 +218,16 @@ async function processQueue() {
   });
   
   // Get category info and run scrape
-  let cat;
-  const category = nextJob.category;
-  const pathToName = {
-    'mercearia': 'Mercearia', 'frescos': 'Frescos', 'laticinios-e-ovos': 'Laticínios',
-    'congelados': 'Congelados', 'bebidas-e-garrafeira': 'Bebidas E Garrafeira', 
-    'limpeza': 'Limpeza', 'higiene': 'Higiene', 'bebe': 'Bebé', 
-    'animais': 'Animais', 'bio-e-saudavel': 'Bio e Saudável',
-    'cao': 'Cão', 'gato': 'Gato', 'frutas': 'Frutas', 'legumes': 'Legumes',
-    'peixaria': 'Peixaria', 'talho': 'Talho', 'charcutaria': 'Charcutaria', 'queijos': 'Queijos',
-    'leite': 'Leite', 'iogurtes': 'Iogurtes', 'gelados': 'Gelados',
-  };
-  
-  if (category.includes('/')) {
-    const cleanPath = category.replace(/^\/+/, '').replace(/\/+$/, '');
-    const parts = cleanPath.split('/');
-    const mainCatKey = parts[0];
-    const mainCatName = pathToName[mainCatKey] || mainCatKey.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    const subCatName = parts[1] ? (pathToName[parts[1]] || parts[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) : mainCatName;
-    cat = {
-      name: cleanPath,
-      url: '/' + cleanPath + '/',
-      label: subCatName,
-      mainCategory: mainCatName,
-    };
-  } else {
-    cat = CATEGORIES.find(c => c.name === category) || { name: category, label: category, url: '/' + category + '/' };
-  }
-  
+  const cat = buildCategoryDescriptor(nextJob.category);
+
   try {
-    await scrapeCategory(cat, nextJob.limit || 0, nextJob.delayMs);
+    await scrapeCategory(cat, nextJob.limit || 0, nextJob.delayMs, {
+      startOffset: (nextJob.cursorStart && nextJob.cursorStart > 0)
+        ? nextJob.cursorStart
+        : Math.floor((nextJob.scraped || 0) / 48) * 48,
+      initialScraped: nextJob.scraped || 0,
+      initialErrors: nextJob.errors || 0,
+    });
     // Mark as completed
     await prisma.scrapeJob.update({
       where: { id: nextJob.id },
@@ -294,53 +371,10 @@ router.post('/start', async (req, res) => {
   const settings = await prisma.settings.findUnique({ where: { id: 'default' } });
   const delayMs = settings?.delayMs || 2000;
 
-  // Check if category is a full URL, has a slash (subcategory), or just a name
-  let cat;
-  // Map URL path segments to display names (including full main category names)
-  const pathToName = {
-    'mercearia': 'Mercearia', 'frescos': 'Frescos', 'laticinios-e-ovos': 'Laticínios',
-    'congelados': 'Congelados', 'bebidas-e-garrafeira': 'Bebidas E Garrafeira', 
-    'limpeza': 'Limpeza', 'higiene': 'Higiene', 'bebe': 'Bebé', 
-    'animais': 'Animais', 'bio-e-saudavel': 'Bio e Saudável',
-    'cao': 'Cão', 'gato': 'Gato', 'frutas': 'Frutas', 'legumes': 'Legumes',
-    'peixaria': 'Peixaria', 'talho': 'Talho', 'charcutaria': 'Charcutaria', 'queijos': 'Queijos',
-    'leite': 'Leite', 'iogurtes': 'Iogurtes', 'gelados': 'Gelados',
-  };
+  // Build category descriptor from input (name/path/url)
+  const cat = buildCategoryDescriptor(category);
   
-  if (category.includes('/')) {
-    // It's a subcategory path like "mercearia/arroz-massa-e-farinha" or "/animais/cao"
-    const cleanPath = category.replace(/^\/+/, '').replace(/\/+$/, ''); // remove leading/trailing slashes
-    const parts = cleanPath.split('/');
-    const mainCatKey = parts[0];
-    const mainCatName = pathToName[mainCatKey] || mainCatKey.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    const subCatName = parts[1] ? (pathToName[parts[1]] || parts[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) : mainCatName;
-    
-    cat = {
-      name: cleanPath,
-      url: '/' + cleanPath + '/',
-      label: subCatName,  // Just the subcategory name
-      mainCategory: mainCatName,  // Store main category separately
-    };
-  } else if (category.startsWith('http') || category.startsWith('/')) {
-    // It's a URL from discovered categories
-    const url = category.startsWith('http') ? category : `https://www.continente.pt${category}`;
-    const pathParts = url.split('/').filter(p => p);
-    const categoryName = pathParts.find(p => 
-      p.includes('mercearia') || p.includes('frescos') || p.includes('laticinios') || 
-      p.includes('congelados') || p.includes('bebidas') || p.includes('limpeza')
-    ) || pathParts[pathParts.length - 1];
-    
-    cat = { 
-      name: categoryName, 
-      url: '/' + category.replace(/^\/+/, '').replace(/\/+$/, ''),
-      label: pathParts[pathParts.length - 1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-    };
-  } else {
-    // It's a category name
-    cat = CATEGORIES.find(c => c.name === category);
-  }
-  
-  if (!cat) {
+  if (!cat || !cat.name) {
     return res.status(400).json({ error: 'Invalid category' });
   }
 
@@ -351,6 +385,7 @@ router.post('/start', async (req, res) => {
       category: cat.name,
       label: cat.label,
       limit: parsedLimit,
+      cursorStart: 0,
       status: 'running',
       delayMs,
     },
@@ -693,9 +728,9 @@ async function getProductLinks(page, categoryUrl, maxProducts = 0) {
 }
 
 // Main scraping function - streaming approach: scrape as we discover
-async function scrapeCategory(category, limit, delayMs) {
+async function scrapeCategory(category, limit, delayMs, opts = {}) {
   console.log(`Starting scrape: ${category.label}`);
-  
+
   const browser = await puppeteer.launch({
     executablePath: CHROME_PATH,
     headless: true,
@@ -705,15 +740,24 @@ async function scrapeCategory(category, limit, delayMs) {
   const page = await browser.newPage();
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
 
-  let start = 0;
   const pageSize = 48;
-  let scraped = 0;
-  let errors = 0;
+  let start = opts.startOffset || 0;
+  let scraped = opts.initialScraped || 0;
+  let errors = opts.initialErrors || 0;
   let productLinks = [];
   const maxPages = limit > 0 ? Math.ceil(limit / pageSize) : 150; // Default max 150 pages (~7,200 products)
+  let pageNum = Math.floor(start / pageSize) + 1;
 
   // Scrape as we discover links (streaming)
-  for (let pageNum = 1; pageNum <= maxPages && isScraping; pageNum++) {
+  while (pageNum <= maxPages && isScraping) {
+    // Persist current cursor so resume can continue from here
+    if (currentJob) {
+      currentJob = await prisma.scrapeJob.update({
+        where: { id: currentJob.id },
+        data: { cursorStart: start, scraped, errors },
+      });
+    }
+
     const url = `${BASE_URL}${category.url}?start=${start}&srule=FOOD&pmin=0.01`;
     console.log(`  Page ${pageNum}: ${url}`);
     
@@ -863,7 +907,7 @@ async function scrapeCategory(category, limit, delayMs) {
         if (currentJob) {
           currentJob = await prisma.scrapeJob.update({
             where: { id: currentJob.id },
-            data: { scraped, errors },
+            data: { scraped, errors, cursorStart: start },
           });
         }
         
@@ -877,7 +921,8 @@ async function scrapeCategory(category, limit, delayMs) {
     
     if (productLinks.length === 0) break;
     start += pageSize;
-    
+    pageNum++;
+
     // Check if we hit limit
     if (limit > 0 && scraped >= limit) break;
   }
@@ -886,11 +931,12 @@ async function scrapeCategory(category, limit, delayMs) {
   if (currentJob) {
     await prisma.scrapeJob.update({
       where: { id: currentJob.id },
-      data: { 
+      data: {
         status: 'completed',
         completedAt: new Date(),
         scraped,
         errors,
+        cursorStart: start,
       },
     });
   }

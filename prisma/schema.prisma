@@ -49,6 +49,7 @@ model ScrapeJob {
   total       Int      @default(0)
   scraped     Int      @default(0)
   errors      Int      @default(0)
+  cursorStart Int      @default(0) // listing cursor (start=) for resume
   startedAt   DateTime @default(now())
   completedAt DateTime?
   delayMs     Int      @default(2000)

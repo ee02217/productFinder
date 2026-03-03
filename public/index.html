@@ -141,8 +141,8 @@
         <div id="scrapeResults" style="margin-top:1rem;">
           <h3>Scrape Queue</h3>
           <table class="products-table">
-            <thead><tr><th>Category</th><th>Limit</th><th>Status</th><th>Scraped</th><th>Errors</th></tr></thead>
-            <tbody id="scrapeResultsBody"><tr><td colspan="5">Select categories and click Start</td></tr></tbody>
+            <thead><tr><th>Category</th><th>Limit</th><th>Status</th><th>Scraped</th><th>Errors</th><th></th></tr></thead>
+            <tbody id="scrapeResultsBody"><tr><td colspan="6">Select categories and click Start</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -484,13 +484,27 @@ async function loadScrapeQueue() {
     if (!tbody) return;
     // Show all jobs (newest first)
     const sortedJobs = jobs.sort((a,b) => new Date(b.startedAt) - new Date(a.startedAt));
-    tbody.innerHTML = sortedJobs.map(j => 
-      `<tr><td>${j.label || j.category}</td><td>${j.limit ?? 0}</td><td>${statusIcon[j.status] || j.status} ${j.status}</td><td>${j.scraped}</td><td>${j.errors}</td></tr>`
-    ).join('') || '<tr><td colspan="5">No scrape history - select categories and click Start</td></tr>';
+    tbody.innerHTML = sortedJobs.map(j => {
+      const canResume = ['running','failed','pending'].includes(j.status);
+      const action = canResume ? `<button class="btn btn-secondary" style="padding:4px 8px" onclick="resumeJob('${j.id}')">Resume</button>` : '';
+      return `<tr><td>${j.label || j.category}</td><td>${j.limit ?? 0}</td><td>${statusIcon[j.status] || j.status} ${j.status}</td><td>${j.scraped}</td><td>${j.errors}</td><td>${action}</td></tr>`;
+    }).join('') || '<tr><td colspan="6">No scrape history - select categories and click Start</td></tr>';
   } catch(e) { 
     console.error(e); 
     const tbody = document.getElementById('scrapeResultsBody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5">Error loading queue</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6">Error loading queue</td></tr>';
+  }
+}
+
+async function resumeJob(jobId) {
+  try {
+    const res = await fetch(API+`/api/scraper/resume/${jobId}`, { method:'POST' });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    await loadScrapeQueue();
+    await checkStatus();
+  } catch (e) {
+    alert('Resume failed: ' + e.message);
   }
 }
 
