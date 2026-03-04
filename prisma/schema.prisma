@@ -45,7 +45,7 @@ model ScrapeJob {
   category    String   // category name/path
   label       String?  // human-readable label for display
   limit       Int      @default(0) // max products for this job (0 = all)
-  status      String   @default("pending") // pending, running, completed, failed
+  status      String   @default("pending") // pending, running, completed, failed, canceled
   total       Int      @default(0)
   scraped     Int      @default(0)
   errors      Int      @default(0)

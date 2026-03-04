@@ -228,21 +228,28 @@ async function processQueue() {
       initialScraped: nextJob.scraped || 0,
       initialErrors: nextJob.errors || 0,
     });
-    // Mark as completed
-    await prisma.scrapeJob.update({
-      where: { id: nextJob.id },
-      data: { status: 'completed', completedAt: new Date() },
-    });
+
+    // If a stop was requested mid-run, keep it canceled (do not overwrite to completed)
+    const statusAfterRun = await prisma.scrapeJob.findUnique({ where: { id: nextJob.id }, select: { status: true } });
+    if (statusAfterRun?.status === 'running') {
+      await prisma.scrapeJob.update({
+        where: { id: nextJob.id },
+        data: { status: 'completed', completedAt: new Date() },
+      });
+    }
   } catch (err) {
-    await prisma.scrapeJob.update({
-      where: { id: nextJob.id },
-      data: { status: 'failed', completedAt: new Date() },
-    });
+    const statusAfterErr = await prisma.scrapeJob.findUnique({ where: { id: nextJob.id }, select: { status: true } });
+    if (statusAfterErr?.status === 'running') {
+      await prisma.scrapeJob.update({
+        where: { id: nextJob.id },
+        data: { status: 'failed', completedAt: new Date() },
+      });
+    }
   }
-  
+
   isScraping = false;
   currentJob = null;
-  
+
   // Process next in queue
   processQueue();
 }
@@ -407,10 +414,26 @@ router.post('/start', async (req, res) => {
   res.json({ jobId: job.id, status: 'started' });
 });
 
-// Stop scraping
+// Stop current scrape and cancel pending/future queued jobs
 router.post('/stop', async (req, res) => {
-  isScraping = false;
-  res.json({ status: 'stopping' });
+  try {
+    // Signal active loops to stop
+    isScraping = false;
+
+    const now = new Date();
+
+    // Cancel currently running + pending queue entries
+    const canceled = await prisma.scrapeJob.updateMany({
+      where: { status: { in: ['running', 'pending'] } },
+      data: { status: 'canceled', completedAt: now },
+    });
+
+    currentJob = null;
+
+    res.json({ status: 'stopped', canceledJobs: canceled.count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Parse price to cents

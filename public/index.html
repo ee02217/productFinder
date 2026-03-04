@@ -479,13 +479,13 @@ async function loadScrapeQueue() {
     const res = await fetch(API+'/api/scraper/queue');
     if (!res.ok) throw new Error('Failed to load queue');
     const jobs = await res.json();
-    const statusIcon = { pending: '⏳', running: '🔄', completed: '✅', failed: '❌' };
+    const statusIcon = { pending: '⏳', running: '🔄', completed: '✅', failed: '❌', canceled: '⏹️' };
     const tbody = document.getElementById('scrapeResultsBody');
     if (!tbody) return;
     // Show all jobs (newest first)
     const sortedJobs = jobs.sort((a,b) => new Date(b.startedAt) - new Date(a.startedAt));
     tbody.innerHTML = sortedJobs.map(j => {
-      const canResume = ['running','failed','pending'].includes(j.status);
+      const canResume = ['running','failed','pending','canceled'].includes(j.status);
       const action = canResume ? `<button class="btn btn-secondary" style="padding:4px 8px" onclick="resumeJob('${j.id}')">Resume</button>` : '';
       return `<tr><td>${j.label || j.category}</td><td>${j.limit ?? 0}</td><td>${statusIcon[j.status] || j.status} ${j.status}</td><td>${j.scraped}</td><td>${j.errors}</td><td>${action}</td></tr>`;
     }).join('') || '<tr><td colspan="6">No scrape history - select categories and click Start</td></tr>';
