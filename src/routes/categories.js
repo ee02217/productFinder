@@ -442,4 +442,71 @@ router.get('/scrape-options', async (req, res) => {
   }
 });
 
+// Update category label/url used for scraping
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { label, urlPath } = req.body || {};
+
+    const existing = await prisma.category.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'Category not found' });
+
+    const data = {};
+
+    if (typeof label === 'string' && label.trim()) {
+      data.label = label.trim();
+    }
+
+    if (typeof urlPath === 'string' && urlPath.trim()) {
+      const normalized = '/' + urlPath.trim().replace(/^\/+/, '').replace(/\/+$/, '') + '/';
+      data.urlPath = normalized;
+
+      // Keep name aligned with path leaf segment (helps consistency)
+      const parts = normalized.split('/').filter(Boolean);
+      if (parts.length > 0) data.name = parts[parts.length - 1];
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: 'Nothing to update (label/urlPath)' });
+    }
+
+    const updated = await prisma.category.update({
+      where: { id },
+      data,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating category:', error);
+    res.status(500).json({ error: 'Failed to update category' });
+  }
+});
+
+// Delete category (and descendants)
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const root = await prisma.category.findUnique({
+      where: { id },
+      include: { children: { include: { children: true } } },
+    });
+
+    if (!root) return res.status(404).json({ error: 'Category not found' });
+
+    const ids = [id];
+    for (const child of root.children || []) {
+      ids.push(child.id);
+      for (const grand of child.children || []) ids.push(grand.id);
+    }
+
+    await prisma.category.deleteMany({ where: { id: { in: ids } } });
+
+    res.json({ deleted: ids.length });
+  } catch (error) {
+    console.error('Error deleting category:', error);
+    res.status(500).json({ error: 'Failed to delete category' });
+  }
+});
+
 module.exports = router;

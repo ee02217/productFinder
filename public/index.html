@@ -177,10 +177,10 @@
               <th>Category</th>
               <th>Sub Category</th>
               <th>URL Path</th>
-              <th></th>
+              <th>Actions</th>
             </tr>
           </thead>
-          <tbody id="categoriesTable"><tr><td colspan="5">Loading...</td></tr></tbody>
+          <tbody id="categoriesTable"><tr><td colspan="4">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -301,7 +301,7 @@ async function discoverSubcategories() {
 
 async function loadCategories() {
   const tbody = document.getElementById('categoriesTable');
-  tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
   try {
     const res = await fetch(API+'/api/categories');
     const allCats = await res.json();
@@ -320,22 +320,50 @@ async function loadCategories() {
     roots.forEach(root => {
       root.subs = root.subs || [];
       root.subs.forEach(sub => {
-        html += '<tr><td>'+root.label+'</td><td>'+sub.label+'</td><td>'+sub.urlPath+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+sub.id+'\')">X</button></td></tr>';
+        html += '<tr><td>'+root.label+'</td><td>'+sub.label+'</td><td>'+sub.urlPath+'</td><td>'+
+          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategory(\''+sub.id+'\','+JSON.stringify(sub.label)+','+JSON.stringify(sub.urlPath)+')">Edit</button>'+
+          '<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+sub.id+'\')">X</button>'+
+          '</td></tr>';
       });
       if (root.subs.length === 0) {
-        html += '<tr><td>'+root.label+'</td><td>-</td><td>'+root.urlPath+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+root.id+'\')">X</button></td></tr>';
+        html += '<tr><td>'+root.label+'</td><td>-</td><td>'+root.urlPath+'</td><td>'+
+          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategory(\''+root.id+'\','+JSON.stringify(root.label)+','+JSON.stringify(root.urlPath)+')">Edit</button>'+
+          '<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+root.id+'\')">X</button>'+
+          '</td></tr>';
       }
     });
     tbody.innerHTML = html || '<tr><td colspan="4">No categories</td></tr>';
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="5">Error: '+e.message+'</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4">Error: '+e.message+'</td></tr>';
+  }
+}
+
+async function editCategory(id, currentLabel, currentUrlPath) {
+  const newLabel = prompt('Edit category label:', currentLabel || '');
+  if (newLabel === null) return;
+  const newUrlPath = prompt('Edit scrape URL path:', currentUrlPath || '');
+  if (newUrlPath === null) return;
+
+  try {
+    const res = await fetch(API+'/api/categories/'+id, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ label: newLabel, urlPath: newUrlPath })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to update category');
+    loadCategories();
+  } catch(e) {
+    alert('Error: '+e.message);
   }
 }
 
 async function deleteCategory(id) {
   if (!confirm('Delete this category?')) return;
   try {
-    await fetch(API+'/api/categories/'+id, { method: 'DELETE' });
+    const res = await fetch(API+'/api/categories/'+id, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to delete category');
     loadCategories();
   } catch(e) { alert('Error: '+e.message); }
 }
