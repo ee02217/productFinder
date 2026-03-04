@@ -321,13 +321,15 @@ async function loadCategories() {
       root.subs = root.subs || [];
       root.subs.forEach(sub => {
         html += '<tr><td>'+root.label+'</td><td>'+sub.label+'</td><td>'+sub.urlPath+'</td><td>'+
-          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategory(\''+sub.id+'\',\''+encodeURIComponent(sub.label || '')+'\',\''+encodeURIComponent(sub.urlPath || '')+'\')">Edit</button>'+
+          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryLabel(\''+sub.id+'\',\''+encodeURIComponent(sub.label || '')+'\')">Edit Name</button>'+
+          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryUrl(\''+sub.id+'\',\''+encodeURIComponent(sub.urlPath || '')+'\')">Edit URL</button>'+
           '<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+sub.id+'\')">X</button>'+
           '</td></tr>';
       });
       if (root.subs.length === 0) {
         html += '<tr><td>'+root.label+'</td><td>-</td><td>'+root.urlPath+'</td><td>'+
-          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategory(\''+root.id+'\',\''+encodeURIComponent(root.label || '')+'\',\''+encodeURIComponent(root.urlPath || '')+'\')">Edit</button>'+
+          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryLabel(\''+root.id+'\',\''+encodeURIComponent(root.label || '')+'\')">Edit Name</button>'+
+          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryUrl(\''+root.id+'\',\''+encodeURIComponent(root.urlPath || '')+'\')">Edit URL</button>'+
           '<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+root.id+'\')">X</button>'+
           '</td></tr>';
       }
@@ -338,24 +340,37 @@ async function loadCategories() {
   }
 }
 
-async function editCategory(id, encodedLabel, encodedUrlPath) {
-  const currentLabel = decodeURIComponent(encodedLabel || '');
-  const currentUrlPath = decodeURIComponent(encodedUrlPath || '');
+async function updateCategory(id, payload) {
+  const res = await fetch(API+'/api/categories/'+id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to update category');
+  return data;
+}
 
+async function editCategoryLabel(id, encodedLabel) {
+  const currentLabel = decodeURIComponent(encodedLabel || '');
   const newLabel = prompt('Edit category label:', currentLabel || '');
   if (newLabel === null) return;
+  try {
+    await updateCategory(id, { label: newLabel });
+    alert('Category name saved');
+    loadCategories();
+  } catch(e) {
+    alert('Error: '+e.message);
+  }
+}
+
+async function editCategoryUrl(id, encodedUrlPath) {
+  const currentUrlPath = decodeURIComponent(encodedUrlPath || '');
   const newUrlPath = prompt('Edit scrape URL path:', currentUrlPath || '');
   if (newUrlPath === null) return;
-
   try {
-    const res = await fetch(API+'/api/categories/'+id, {
-      method: 'PUT',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ label: newLabel, urlPath: newUrlPath })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to update category');
-    alert('Category saved');
+    await updateCategory(id, { urlPath: newUrlPath });
+    alert('Category URL saved');
     loadCategories();
   } catch(e) {
     alert('Error: '+e.message);
