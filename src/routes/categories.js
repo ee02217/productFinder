@@ -421,6 +421,128 @@ router.post('/discover-subs/:mainCategory', async (req, res) => {
   }
 });
 
+// Category stats for admin table (product count + last scrape)
+router.get('/stats', async (req, res) => {
+  try {
+    const categories = await prisma.category.findMany({
+      include: {
+        parent: true,
+      },
+    });
+
+    const byCategory = await prisma.product.groupBy({
+      by: ['category'],
+      _count: { _all: true },
+      _max: { updatedAt: true },
+    });
+
+    const byCategorySub = await prisma.product.groupBy({
+      by: ['category', 'subcategory'],
+      _count: { _all: true },
+      _max: { updatedAt: true },
+    });
+
+    const jobs = await prisma.scrapeJob.findMany({
+      select: { category: true, startedAt: true, completedAt: true },
+      orderBy: { startedAt: 'desc' },
+      take: 1000,
+    });
+
+    const normalizePath = (p) => {
+      if (!p) return null;
+      let s = String(p).trim();
+      s = s.replace(/^https?:\/\/[^/]+/i, '');
+      s = s.replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
+      return s ? `/${s}/` : '/';
+    };
+
+    const jobLastByPath = {};
+    for (const j of jobs) {
+      const key = normalizePath(j.category);
+      if (!key) continue;
+      const ts = j.completedAt || j.startedAt;
+      if (!ts) continue;
+      if (!jobLastByPath[key] || new Date(ts) > new Date(jobLastByPath[key])) {
+        jobLastByPath[key] = ts;
+      }
+    }
+
+    const normalizeText = (v) => String(v || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+
+    const byCategoryMap = new Map();
+    for (const g of byCategory) {
+      const rawCat = String(g.category || '');
+      const root = rawCat.split('/')[0]; // handle legacy "Main/Sub" category values
+      const key = normalizeText(root);
+      const prev = byCategoryMap.get(key) || { count: 0, lastProductAt: null };
+      const count = prev.count + (g._count._all || 0);
+      const lastProductAt = (!prev.lastProductAt || (g._max.updatedAt && new Date(g._max.updatedAt) > new Date(prev.lastProductAt)))
+        ? g._max.updatedAt
+        : prev.lastProductAt;
+      byCategoryMap.set(key, { count, lastProductAt });
+    }
+
+    const byCategorySubMap = new Map();
+    for (const g of byCategorySub) {
+      const rawCat = String(g.category || '');
+      const rawSub = String(g.subcategory || '');
+      const catParts = rawCat.split('/');
+      const main = normalizeText(catParts[0]);
+      const subFromCat = catParts[1] ? normalizeText(catParts[1]) : null;
+      const sub = subFromCat || normalizeText(rawSub);
+      const key = `${main}|${sub}`;
+      const prev = byCategorySubMap.get(key) || { count: 0, lastProductAt: null };
+      const count = prev.count + (g._count._all || 0);
+      const lastProductAt = (!prev.lastProductAt || (g._max.updatedAt && new Date(g._max.updatedAt) > new Date(prev.lastProductAt)))
+        ? g._max.updatedAt
+        : prev.lastProductAt;
+      byCategorySubMap.set(key, { count, lastProductAt });
+    }
+
+    const stats = {};
+
+    for (const c of categories) {
+      let productCount = 0;
+      let lastProductAt = null;
+
+      if (c.level === 1) {
+        const k = normalizeText(c.label);
+        const hit = byCategoryMap.get(k);
+        if (hit) {
+          productCount = hit.count || 0;
+          lastProductAt = hit.lastProductAt || null;
+        }
+      } else if (c.level === 2) {
+        const parentLabel = normalizeText(c.parent?.label || '');
+        const selfLabel = normalizeText(c.label || '');
+        const hit = byCategorySubMap.get(`${parentLabel}|${selfLabel}`);
+        if (hit) {
+          productCount = hit.count || 0;
+          lastProductAt = hit.lastProductAt || null;
+        }
+      }
+
+      const lastScrapeAt = jobLastByPath[normalizePath(c.urlPath)] || null;
+
+      stats[c.id] = {
+        productCount,
+        lastProductAt,
+        lastScrapeAt,
+      };
+    }
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching category stats:', error);
+    res.status(500).json({ error: 'Failed to fetch category stats' });
+  }
+});
+
 // Get scrape options - subcategories only (level 2)
 router.get('/scrape-options', async (req, res) => {
   try {

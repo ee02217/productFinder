@@ -177,10 +177,12 @@
               <th>Category</th>
               <th>Sub Category</th>
               <th>URL Path</th>
+              <th>Products</th>
+              <th>Last Scrape</th>
               <th>Actions</th>
             </tr>
           </thead>
-          <tbody id="categoriesTable"><tr><td colspan="4">Loading...</td></tr></tbody>
+          <tbody id="categoriesTable"><tr><td colspan="6">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -303,12 +305,18 @@ let categoryRoots = [];
 
 async function loadCategories() {
   const tbody = document.getElementById('categoriesTable');
-  tbody.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
   try {
-    const res = await fetch(API+'/api/categories');
+    const [res, statsRes] = await Promise.all([
+      fetch(API+'/api/categories'),
+      fetch(API+'/api/categories/stats')
+    ]);
     const allCats = await res.json();
+    const stats = await statsRes.json();
+    const fmtDate = (v) => v ? new Date(v).toLocaleString() : '-';
+
     if (allCats.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4">No categories. Click "Seed Main Categories" to add.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6">No categories. Click "Seed Main Categories" to add.</td></tr>';
       return;
     }
     // Build hierarchy map
@@ -323,7 +331,8 @@ async function loadCategories() {
     roots.forEach(root => {
       root.subs = root.subs || [];
       root.subs.forEach(sub => {
-        html += '<tr><td>'+root.label+'</td><td>'+sub.label+'</td><td>'+sub.urlPath+'</td><td>'+
+        const st = stats[sub.id] || {};
+        html += '<tr><td>'+root.label+'</td><td>'+sub.label+'</td><td>'+sub.urlPath+'</td><td>'+(st.productCount || 0)+'</td><td>'+fmtDate(st.lastScrapeAt)+'</td><td>'+
           '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryParent(\''+sub.id+'\',\''+encodeURIComponent(root.label || '')+'\')">Edit Category</button>'+
           '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryLabel(\''+sub.id+'\',\''+encodeURIComponent(sub.label || '')+'\')">Edit Name</button>'+
           '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryUrl(\''+sub.id+'\',\''+encodeURIComponent(sub.urlPath || '')+'\')">Edit URL</button>'+
@@ -331,16 +340,17 @@ async function loadCategories() {
           '</td></tr>';
       });
       if (root.subs.length === 0) {
-        html += '<tr><td>'+root.label+'</td><td>-</td><td>'+root.urlPath+'</td><td>'+
+        const st = stats[root.id] || {};
+        html += '<tr><td>'+root.label+'</td><td>-</td><td>'+root.urlPath+'</td><td>'+(st.productCount || 0)+'</td><td>'+fmtDate(st.lastScrapeAt)+'</td><td>'+
           '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryLabel(\''+root.id+'\',\''+encodeURIComponent(root.label || '')+'\')">Edit Name</button>'+
           '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryUrl(\''+root.id+'\',\''+encodeURIComponent(root.urlPath || '')+'\')">Edit URL</button>'+
           '<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+root.id+'\')">X</button>'+
           '</td></tr>';
       }
     });
-    tbody.innerHTML = html || '<tr><td colspan="4">No categories</td></tr>';
+    tbody.innerHTML = html || '<tr><td colspan="6">No categories</td></tr>';
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="4">Error: '+e.message+'</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6">Error: '+e.message+'</td></tr>';
   }
 }
 
