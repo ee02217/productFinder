@@ -312,7 +312,7 @@ router.post('/product', async (req, res) => {
 
       const newPriceCents = parsePrice(data.price);
       const newPricePerKgCents = data.pricePerKg ? parsePrice(data.pricePerKg) : null;
-      const newPriceUnit = data.priceUnit; // 'kg' or 'l' or null
+      const newPriceUnit = data.priceUnit; // 'kg' | 'l' | 'un' | null
       const newPvpCents = data.pvp ? parsePrice(data.pvp) : null;
 
       if (latestPrice) {
@@ -548,7 +548,7 @@ async function extractProductData(page, categoryInfo = null) {
     // --- Price extraction (prefer DOM selectors; fallback to text scan) ---
     let unitPrice = null;
     let pricePerKg = null; // semantics: "price per unit" (kg / lt) but kept for DB compatibility
-    let priceUnit = null; // 'kg' or 'l' if pricePerKg is set
+    let priceUnit = null; // 'kg' | 'l' | 'un' if pricePerKg is set
     let pvpPrice = null;
 
     const extractPriceNumber = (s) => {
@@ -560,10 +560,12 @@ async function extractProductData(page, categoryInfo = null) {
     // 1) Primary/secondary price blocks (most reliable)
     unitPrice = extractPriceNumber(document.querySelector('.pwc-tile--price-primary')?.textContent);
     const secondaryText = document.querySelector('.pwc-tile--price-secondary')?.textContent || '';
+    const secondaryNorm = secondaryText.toLowerCase().replace(/\s+/g, '');
     pricePerKg = extractPriceNumber(secondaryText);
-    // Determine unit (kg or l)
-    if (secondaryText.toLowerCase().includes('/kg')) priceUnit = 'kg';
-    else if (secondaryText.toLowerCase().includes('/l') || secondaryText.toLowerCase().includes('/lt')) priceUnit = 'l';
+    // Determine unit (kg, l/lt, un)
+    if (secondaryNorm.includes('/kg')) priceUnit = 'kg';
+    else if (secondaryNorm.includes('/l') || secondaryNorm.includes('/lt')) priceUnit = 'l';
+    else if (secondaryNorm.includes('/un')) priceUnit = 'un';
 
     // PVPR/original price
     const pvprText = document.querySelector('.prices-wrapper .list')?.textContent;
@@ -585,12 +587,13 @@ async function extractProductData(page, categoryInfo = null) {
         }
 
         const afterClean = afterText.replace(/€/g, '');
-        if (afterClean.includes('/KG') || afterClean.includes('/L') || afterClean.includes('/LT')) {
+        if (afterClean.includes('/KG') || afterClean.includes('/L') || afterClean.includes('/LT') || afterClean.includes('/UN')) {
           if (!pricePerKg) pricePerKg = priceValue;
           if (!priceUnit) {
             if (afterClean.includes('/KG')) priceUnit = 'kg';
             else if (afterClean.includes('/LT')) priceUnit = 'l';
             else if (afterClean.includes('/L')) priceUnit = 'l';
+            else if (afterClean.includes('/UN')) priceUnit = 'un';
           }
           if (!unitPrice) unitPrice = priceValue;
         } else if (!unitPrice) {
@@ -869,7 +872,7 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
 
               const newPriceCents = parsePrice(data.price);
               const newPricePerKgCents = data.pricePerKg ? parsePrice(data.pricePerKg) : null;
-              const newPriceUnit = data.priceUnit; // 'kg' or 'l' or null
+              const newPriceUnit = data.priceUnit; // 'kg' | 'l' | 'un' | null
               const newPvpCents = data.pvp ? parsePrice(data.pvp) : null;
 
               if (latestPrice) {
