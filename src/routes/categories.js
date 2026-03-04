@@ -446,7 +446,7 @@ router.get('/scrape-options', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { label, urlPath } = req.body || {};
+    const { label, urlPath, parentId } = req.body || {};
 
     const existing = await prisma.category.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Category not found' });
@@ -466,8 +466,26 @@ router.put('/:id', async (req, res) => {
       if (parts.length > 0) data.name = parts[parts.length - 1];
     }
 
+    // Allow changing parent category (for subcategories)
+    if (typeof parentId !== 'undefined') {
+      if (parentId === null || parentId === '') {
+        data.parentId = null;
+        data.level = 1;
+      } else {
+        if (parentId === id) {
+          return res.status(400).json({ error: 'Category cannot be its own parent' });
+        }
+        const parent = await prisma.category.findUnique({ where: { id: parentId } });
+        if (!parent) {
+          return res.status(400).json({ error: 'Parent category not found' });
+        }
+        data.parentId = parentId;
+        data.level = parent.level + 1;
+      }
+    }
+
     if (Object.keys(data).length === 0) {
-      return res.status(400).json({ error: 'Nothing to update (label/urlPath)' });
+      return res.status(400).json({ error: 'Nothing to update (label/urlPath/parentId)' });
     }
 
     const updated = await prisma.category.update({

@@ -299,6 +299,8 @@ async function discoverSubcategories() {
   }
 }
 
+let categoryRoots = [];
+
 async function loadCategories() {
   const tbody = document.getElementById('categoriesTable');
   tbody.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
@@ -316,11 +318,13 @@ async function loadCategories() {
       if (c.parentId && catMap[c.parentId]) catMap[c.parentId].subs.push(c);
     });
     const roots = allCats.filter(c => !c.parentId);
+    categoryRoots = roots.map(r => ({ id: r.id, label: r.label }));
     let html = '';
     roots.forEach(root => {
       root.subs = root.subs || [];
       root.subs.forEach(sub => {
         html += '<tr><td>'+root.label+'</td><td>'+sub.label+'</td><td>'+sub.urlPath+'</td><td>'+
+          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryParent(\''+sub.id+'\',\''+encodeURIComponent(root.label || '')+'\')">Edit Category</button>'+
           '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryLabel(\''+sub.id+'\',\''+encodeURIComponent(sub.label || '')+'\')">Edit Name</button>'+
           '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategoryUrl(\''+sub.id+'\',\''+encodeURIComponent(sub.urlPath || '')+'\')">Edit URL</button>'+
           '<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+sub.id+'\')">X</button>'+
@@ -349,6 +353,27 @@ async function updateCategory(id, payload) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to update category');
   return data;
+}
+
+async function editCategoryParent(id, encodedCurrentParentLabel) {
+  const currentParentLabel = decodeURIComponent(encodedCurrentParentLabel || '');
+  const options = categoryRoots.map(r => r.label).join(', ');
+  const newParentLabel = prompt('Edit parent category. Options: ' + options, currentParentLabel || '');
+  if (newParentLabel === null) return;
+
+  const target = categoryRoots.find(r => r.label.toLowerCase() === newParentLabel.trim().toLowerCase());
+  if (!target) {
+    alert('Category not found. Use one of: ' + options);
+    return;
+  }
+
+  try {
+    await updateCategory(id, { parentId: target.id });
+    alert('Parent category saved');
+    loadCategories();
+  } catch(e) {
+    alert('Error: '+e.message);
+  }
 }
 
 async function editCategoryLabel(id, encodedLabel) {
