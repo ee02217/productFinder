@@ -106,12 +106,12 @@ router.get('/queue', async (req, res) => {
 // Add to queue (creates pending jobs without starting)
 router.post('/queue', async (req, res) => {
   try {
-    const { categories, limit = 50 } = req.body;
+    const { categories, limit = 0 } = req.body;
     if (!categories || !Array.isArray(categories)) {
       return res.status(400).json({ error: 'categories array required' });
     }
 
-    const parsedLimit = Number.isFinite(parseInt(limit, 10)) ? parseInt(limit, 10) : 50;
+    const parsedLimit = Number.isFinite(parseInt(limit, 10)) ? parseInt(limit, 10) : 0;
     const settings = await prisma.settings.findUnique({ where: { id: 'default' } });
     const delayMs = settings?.delayMs || 2000;
 
