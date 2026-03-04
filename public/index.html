@@ -321,13 +321,13 @@ async function loadCategories() {
       root.subs = root.subs || [];
       root.subs.forEach(sub => {
         html += '<tr><td>'+root.label+'</td><td>'+sub.label+'</td><td>'+sub.urlPath+'</td><td>'+
-          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategory(\''+sub.id+'\','+JSON.stringify(sub.label)+','+JSON.stringify(sub.urlPath)+')">Edit</button>'+
+          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategory(\''+sub.id+'\',\''+encodeURIComponent(sub.label || '')+'\',\''+encodeURIComponent(sub.urlPath || '')+'\')">Edit</button>'+
           '<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+sub.id+'\')">X</button>'+
           '</td></tr>';
       });
       if (root.subs.length === 0) {
         html += '<tr><td>'+root.label+'</td><td>-</td><td>'+root.urlPath+'</td><td>'+
-          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategory(\''+root.id+'\','+JSON.stringify(root.label)+','+JSON.stringify(root.urlPath)+')">Edit</button>'+
+          '<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="editCategory(\''+root.id+'\',\''+encodeURIComponent(root.label || '')+'\',\''+encodeURIComponent(root.urlPath || '')+'\')">Edit</button>'+
           '<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteCategory(\''+root.id+'\')">X</button>'+
           '</td></tr>';
       }
@@ -338,7 +338,10 @@ async function loadCategories() {
   }
 }
 
-async function editCategory(id, currentLabel, currentUrlPath) {
+async function editCategory(id, encodedLabel, encodedUrlPath) {
+  const currentLabel = decodeURIComponent(encodedLabel || '');
+  const currentUrlPath = decodeURIComponent(encodedUrlPath || '');
+
   const newLabel = prompt('Edit category label:', currentLabel || '');
   if (newLabel === null) return;
   const newUrlPath = prompt('Edit scrape URL path:', currentUrlPath || '');
@@ -352,6 +355,7 @@ async function editCategory(id, currentLabel, currentUrlPath) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to update category');
+    alert('Category saved');
     loadCategories();
   } catch(e) {
     alert('Error: '+e.message);
