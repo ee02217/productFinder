@@ -46,15 +46,44 @@ const PATH_TO_NAME = {
   'leite': 'Leite', 'iogurtes': 'Iogurtes', 'gelados': 'Gelados',
 };
 
-function buildCategoryDescriptor(categoryInput) {
-  let category = categoryInput || '';
+function normalizeCategoryPath(categoryInput) {
+  let category = String(categoryInput || '');
   if (category.startsWith('http')) {
-    const url = new URL(category);
-    category = url.pathname;
+    try {
+      const url = new URL(category);
+      category = url.pathname;
+    } catch (_) {}
+  }
+  const cleanPath = category.replace(/^\/+/, '').replace(/\/+$/, '');
+  return cleanPath ? ('/' + cleanPath + '/') : '/';
+}
+
+async function buildCategoryDescriptor(categoryInput) {
+  const normalizedPath = normalizeCategoryPath(categoryInput);
+  const cleanPath = normalizedPath.replace(/^\/+/, '').replace(/\/+$/, '');
+
+  // Prefer database category mapping (respects admin edits)
+  const dbCategory = await prisma.category.findFirst({
+    where: {
+      OR: [
+        { urlPath: normalizedPath },
+        { urlPath: normalizedPath.replace(/\/$/, '') },
+      ],
+    },
+    include: { parent: true },
+  });
+
+  if (dbCategory) {
+    return {
+      name: cleanPath || dbCategory.name,
+      url: normalizedPath,
+      label: dbCategory.label,
+      mainCategory: dbCategory.level === 1 ? dbCategory.label : (dbCategory.parent?.label || dbCategory.label),
+    };
   }
 
-  if (category.includes('/')) {
-    const cleanPath = category.replace(/^\/+/, '').replace(/\/+$/, '');
+  // Fallback: derive from URL/name using slug map
+  if (cleanPath.includes('/')) {
     const parts = cleanPath.split('/');
     const mainCatKey = parts[0];
     const mainCatName = PATH_TO_NAME[mainCatKey] || mainCatKey.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -64,16 +93,16 @@ function buildCategoryDescriptor(categoryInput) {
 
     return {
       name: cleanPath,
-      url: '/' + cleanPath + '/',
+      url: normalizedPath,
       label: subCatName,
       mainCategory: mainCatName,
     };
   }
 
-  return CATEGORIES.find(c => c.name === category) || {
-    name: category,
-    url: '/' + category.replace(/^\/+/, '').replace(/\/+$/, '') + '/',
-    label: category,
+  return CATEGORIES.find(c => c.name === cleanPath) || {
+    name: cleanPath,
+    url: normalizedPath,
+    label: cleanPath,
   };
 }
 
@@ -164,7 +193,7 @@ router.post('/resume/:id', async (req, res) => {
     });
     currentJob = runningJob;
 
-    const cat = buildCategoryDescriptor(job.category);
+    const cat = await buildCategoryDescriptor(job.category);
 
     scrapeCategory(cat, job.limit || 0, job.delayMs, {
       startOffset: (job.cursorStart && job.cursorStart > 0)
@@ -218,7 +247,7 @@ async function processQueue() {
   });
   
   // Get category info and run scrape
-  const cat = buildCategoryDescriptor(nextJob.category);
+  const cat = await buildCategoryDescriptor(nextJob.category);
 
   try {
     await scrapeCategory(cat, nextJob.limit || 0, nextJob.delayMs, {
@@ -379,7 +408,7 @@ router.post('/start', async (req, res) => {
   const delayMs = settings?.delayMs || 2000;
 
   // Build category descriptor from input (name/path/url)
-  const cat = buildCategoryDescriptor(category);
+  const cat = await buildCategoryDescriptor(category);
   
   if (!cat || !cat.name) {
     return res.status(400).json({ error: 'Invalid category' });
