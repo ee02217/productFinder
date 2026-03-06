@@ -15,6 +15,7 @@ model Product {
   category    String?
   subcategory String?
   subsubcategory String?
+  unitCount   Int?     // e.g. 60 Un, 144 Un
   imageUrl    String?
   source      String   @default("continente")
   createdAt   DateTime @default(now())

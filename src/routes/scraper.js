@@ -320,6 +320,7 @@ router.post('/product', async (req, res) => {
         category: data.category,
         subcategory: data.subcategory,
         subsubcategory: data.subsubcategory,
+        unitCount: Number.isInteger(data.unitCount) ? data.unitCount : null,
         imageUrl: data.imageUrl,
         source: 'continente',
       },
@@ -330,6 +331,7 @@ router.post('/product', async (req, res) => {
         ...(data.category ? { category: data.category } : {}),
         ...(data.subcategory ? { subcategory: data.subcategory } : {}),
         ...(data.subsubcategory ? { subsubcategory: data.subsubcategory } : {}),
+        ...(Number.isInteger(data.unitCount) ? { unitCount: data.unitCount } : {}),
       },
     });
 
@@ -591,6 +593,12 @@ async function extractProductData(page, categoryInfo = null) {
     const secondaryText = document.querySelector('.pwc-tile--price-secondary')?.textContent || '';
     const secondaryNorm = secondaryText.toLowerCase().replace(/\s+/g, '');
     pricePerKg = extractPriceNumber(secondaryText);
+
+    // Extract unit count (e.g. "60 Un | 0,28 €/Un")
+    let unitCount = null;
+    const unitCountMatch = secondaryText.match(/(\d+)\s*un\b/i);
+    if (unitCountMatch) unitCount = parseInt(unitCountMatch[1], 10);
+
     // Determine unit (kg, l/lt, un)
     if (secondaryNorm.includes('/kg')) priceUnit = 'kg';
     else if (secondaryNorm.includes('/l') || secondaryNorm.includes('/lt')) priceUnit = 'l';
@@ -633,6 +641,12 @@ async function extractProductData(page, categoryInfo = null) {
 
     // Normalize: if we only found one value, treat it as unit price
     if (!unitPrice && pricePerKg) unitPrice = pricePerKg;
+
+    // Fallback unit count extraction from page text
+    if (!unitCount) {
+      const textUnitMatch = text.match(/(\d+)\s*UN\b/i);
+      if (textUnitMatch) unitCount = parseInt(textUnitMatch[1], 10);
+    }
     
     // Extract category from URL
     const pageUrl = url || '';
@@ -718,6 +732,7 @@ async function extractProductData(page, categoryInfo = null) {
       category: productCategory,
       subcategory: productSubcategory,
       subsubcategory: productSubsubcategory,
+      unitCount: Number.isInteger(unitCount) ? unitCount : null,
       breadcrumbs: breadcrumbs,
       price: unitPrice || null,
       pricePerKg: pricePerKg || null,
@@ -879,6 +894,7 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
                 category: category.mainCategory || data.category,
                 subcategory: category.label || data.subcategory,
                 subsubcategory: data.subsubcategory,
+                unitCount: Number.isInteger(data.unitCount) ? data.unitCount : null,
                 imageUrl: data.imageUrl,
               },
               update: {
@@ -888,6 +904,7 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
                 category: category.mainCategory || data.category,
                 subcategory: category.label || data.subcategory,
                 subsubcategory: data.subsubcategory,
+                ...(Number.isInteger(data.unitCount) ? { unitCount: data.unitCount } : {}),
                 imageUrl: data.imageUrl,
               },
             });

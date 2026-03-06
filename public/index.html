@@ -110,7 +110,7 @@
         <table class="products-table">
           <thead>
             <tr>
-              <th>EAN</th><th>Name</th><th>Brand</th><th>Category</th><th>Subcategory</th><th>Price</th><th>Price/kg/l</th><th>PVP</th><th>Updated</th>
+              <th>EAN</th><th>Name</th><th>Brand</th><th>Category</th><th>Subcategory</th><th>Units</th><th>Price</th><th>Price/kg/l</th><th>PVP</th><th>Updated</th>
             </tr>
           </thead>
           <tbody id="productsTable"><tr><td colspan="10">Loading...</td></tr></tbody>
@@ -467,7 +467,7 @@ async function loadProducts(page=1) {
     if(!data.products.length) { tbody.innerHTML='<tr><td colspan="10">No products found</td></tr>'; }
     else {
       tbody.innerHTML = data.products.map(p => 
-        '<tr onclick="showProductDetails(\''+p.id+'\')"><td><code>'+(p.ean||'-')+'</code></td><td>'+(p.name||'-')+'</td><td>'+(p.brand||'-')+'</td><td>'+(p.category||'-')+'</td><td>'+(p.subcategory||'-')+'</td><td class="price">'+(p.currentPrice?(p.currentPrice/100).toFixed(2)+' €':'-')+'</td><td>'+(p.currentPricePerKg?(p.currentPricePerKg/100).toFixed(2)+' €/'+(p.currentPriceUnit||'kg'):'-')+'</td><td>'+(p.currentPvp?'<span class="original-price">'+(p.currentPvp/100).toFixed(2)+' €</span>':'-')+'</td><td>'+new Date(p.lastUpdated).toLocaleDateString()+'</td></tr>'
+        '<tr onclick="showProductDetails(\''+p.id+'\')"><td><code>'+(p.ean||'-')+'</code></td><td>'+(p.name||'-')+'</td><td>'+(p.brand||'-')+'</td><td>'+(p.category||'-')+'</td><td>'+(p.subcategory||'-')+'</td><td>'+(Number.isInteger(p.unitCount)?p.unitCount:'-')+'</td><td class="price">'+(p.currentPrice?(p.currentPrice/100).toFixed(2)+' €':'-')+'</td><td>'+(p.currentPricePerKg?(p.currentPricePerKg/100).toFixed(2)+' €/'+(p.currentPriceUnit||'kg'):'-')+'</td><td>'+(p.currentPvp?'<span class="original-price">'+(p.currentPvp/100).toFixed(2)+' €</span>':'-')+'</td><td>'+new Date(p.lastUpdated).toLocaleDateString()+'</td></tr>'
       ).join('');
     }
     totalPages = data.pagination.pages;
