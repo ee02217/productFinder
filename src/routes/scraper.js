@@ -321,6 +321,7 @@ router.post('/product', async (req, res) => {
         subcategory: data.subcategory,
         subsubcategory: data.subsubcategory,
         unitCount: Number.isInteger(data.unitCount) ? data.unitCount : null,
+        unitType: data.unitType || null,
         imageUrl: data.imageUrl,
         source: 'continente',
       },
@@ -332,6 +333,7 @@ router.post('/product', async (req, res) => {
         ...(data.subcategory ? { subcategory: data.subcategory } : {}),
         ...(data.subsubcategory ? { subsubcategory: data.subsubcategory } : {}),
         ...(Number.isInteger(data.unitCount) ? { unitCount: data.unitCount } : {}),
+        ...(data.unitType ? { unitType: data.unitType } : {}),
       },
     });
 
@@ -594,25 +596,65 @@ async function extractProductData(page, categoryInfo = null) {
     const secondaryNorm = secondaryText.toLowerCase().replace(/\s+/g, '');
     pricePerKg = extractPriceNumber(secondaryText);
 
-    // Extract unit count (e.g. "emb. 64 un", "64 un", "64 unidades")
+    // Extract package quantity/unit (supports un, ml/cl/l, g/gr/kg)
     let unitCount = null;
-    const extractUnitCount = (s) => {
-      if (!s) return null;
-      const txt = String(s);
-      const patterns = [
-        /(?:emb\.?|pack|pack\s+poupan[çc]a|caixa|cx\.?)\s*(\d{1,4})\s*(?:un|unid(?:ades)?|unidades?)\b/i,
-        /(\d{1,4})\s*(?:un|unid(?:ades)?|unidades?)\b/i,
-      ];
-      for (const p of patterns) {
-        const m = txt.match(p);
-        if (m) return parseInt(m[1], 10);
+    let unitType = null; // normalized: un | ml | g
+
+    const normalizePackage = (valueRaw, unitRaw) => {
+      const v = parseFloat(String(valueRaw).replace(',', '.'));
+      if (!Number.isFinite(v) || v <= 0) return null;
+      const u = String(unitRaw || '').toLowerCase();
+
+      if (['un', 'unid', 'unidade', 'unidades'].includes(u)) {
+        return { unitCount: Math.round(v), unitType: 'un' };
+      }
+      if (u === 'ml') {
+        return { unitCount: Math.round(v), unitType: 'ml' };
+      }
+      if (u === 'cl') {
+        return { unitCount: Math.round(v * 10), unitType: 'ml' };
+      }
+      if (u === 'l') {
+        return { unitCount: Math.round(v * 1000), unitType: 'ml' };
+      }
+      if (u === 'g' || u === 'gr') {
+        return { unitCount: Math.round(v), unitType: 'g' };
+      }
+      if (u === 'kg') {
+        return { unitCount: Math.round(v * 1000), unitType: 'g' };
       }
       return null;
     };
 
-    unitCount = extractUnitCount(secondaryText);
+    const extractPackageInfo = (s) => {
+      if (!s) return null;
+      const txt = String(s);
 
-    // Determine unit (kg, l/lt, un)
+      // Prefer explicit packaging context
+      const withContext = /(?:emb\.?|pack(?:\s+poupan[çc]a)?|caixa|cx\.?)\s*([0-9]+(?:[\.,][0-9]+)?)\s*(un|unid|unidade|unidades|ml|cl|l|gr|g|kg)\b/i;
+      const m1 = txt.match(withContext);
+      if (m1) return normalizePackage(m1[1], m1[2]);
+
+      // Generic fallback: first plausible quantity+unit not part of €/unit pricing token
+      const re = /([0-9]+(?:[\.,][0-9]+)?)\s*(un|unid|unidade|unidades|ml|cl|l|gr|g|kg)\b/ig;
+      let m;
+      while ((m = re.exec(txt)) !== null) {
+        const idx = m.index;
+        const before = txt.substring(Math.max(0, idx - 4), idx).toLowerCase();
+        if (before.includes('€/') || before.endsWith('/')) continue; // skip per-unit price token
+        const normalized = normalizePackage(m[1], m[2]);
+        if (normalized) return normalized;
+      }
+      return null;
+    };
+
+    const pkgFromSecondary = extractPackageInfo(secondaryText);
+    if (pkgFromSecondary) {
+      unitCount = pkgFromSecondary.unitCount;
+      unitType = pkgFromSecondary.unitType;
+    }
+
+    // Determine price-per unit type (kg, l/lt, un)
     if (secondaryNorm.includes('/kg')) priceUnit = 'kg';
     else if (secondaryNorm.includes('/l') || secondaryNorm.includes('/lt')) priceUnit = 'l';
     else if (secondaryNorm.includes('/un')) priceUnit = 'un';
@@ -655,9 +697,13 @@ async function extractProductData(page, categoryInfo = null) {
     // Normalize: if we only found one value, treat it as unit price
     if (!unitPrice && pricePerKg) unitPrice = pricePerKg;
 
-    // Fallback unit count extraction from page text
-    if (!unitCount) {
-      unitCount = extractUnitCount(text);
+    // Fallback package extraction from full page text
+    if (!unitCount || !unitType) {
+      const pkgFromText = extractPackageInfo(text);
+      if (pkgFromText) {
+        if (!unitCount) unitCount = pkgFromText.unitCount;
+        if (!unitType) unitType = pkgFromText.unitType;
+      }
     }
     
     // Extract category from URL
@@ -745,6 +791,7 @@ async function extractProductData(page, categoryInfo = null) {
       subcategory: productSubcategory,
       subsubcategory: productSubsubcategory,
       unitCount: Number.isInteger(unitCount) ? unitCount : null,
+      unitType: unitType || null,
       breadcrumbs: breadcrumbs,
       price: unitPrice || null,
       pricePerKg: pricePerKg || null,
@@ -907,6 +954,7 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
                 subcategory: category.label || data.subcategory,
                 subsubcategory: data.subsubcategory,
                 unitCount: Number.isInteger(data.unitCount) ? data.unitCount : null,
+                unitType: data.unitType || null,
                 imageUrl: data.imageUrl,
               },
               update: {
@@ -917,6 +965,7 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
                 subcategory: category.label || data.subcategory,
                 subsubcategory: data.subsubcategory,
                 ...(Number.isInteger(data.unitCount) ? { unitCount: data.unitCount } : {}),
+                ...(data.unitType ? { unitType: data.unitType } : {}),
                 imageUrl: data.imageUrl,
               },
             });

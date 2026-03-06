@@ -52,6 +52,7 @@ router.get('/', async (req, res) => {
         subcategory: p.subcategory,
         subsubcategory: p.subsubcategory,
         unitCount: p.unitCount,
+        unitType: p.unitType,
         imageUrl: p.imageUrl,
         currentPrice: p.prices[0]?.priceCents,
         currentPricePerKg: p.prices[0]?.pricePerKgCents,

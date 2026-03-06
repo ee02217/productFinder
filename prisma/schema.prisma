@@ -15,7 +15,8 @@ model Product {
   category    String?
   subcategory String?
   subsubcategory String?
-  unitCount   Int?     // e.g. 60 Un, 144 Un
+  unitCount   Int?     // normalized quantity (e.g. 64 un, 1500 ml, 500 g)
+  unitType    String?  // normalized unit: un | ml | g
   imageUrl    String?
   source      String   @default("continente")
   createdAt   DateTime @default(now())
