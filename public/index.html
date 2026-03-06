@@ -493,6 +493,8 @@ async function showProductDetails(id) {
     '<div class="product-info-item"><label>Brand</label><input id="editBrand" value="'+(p.brand||'')+'"></div>'+
     '<div class="product-info-item"><label>Category</label><input id="editCategory" value="'+(p.category||'')+'"></div>'+
     '<div class="product-info-item"><label>Subcategory</label><input id="editSubcategory" value="'+(p.subcategory||'')+'"></div>'+
+    '<div class="product-info-item"><label>Unit Count</label><input id="editUnitCount" type="number" min="0" value="'+(Number.isInteger(p.unitCount)?p.unitCount:'')+'"></div>'+
+    '<div class="product-info-item"><label>Unit Type</label><input id="editUnitType" value="'+(p.unitType||'')+'" placeholder="un | ml | g"></div>'+
     '<div class="product-info-item"><label>Image URL</label><input id="editImageUrl" value="'+(p.imageUrl||'')+'"></div>';
   const tbody = document.getElementById('priceHistoryTable');
   if(!p.prices||!p.prices.length) { tbody.innerHTML='<tr><td colspan="5" class="no-history">No price history</td></tr>'; }
@@ -507,11 +509,15 @@ async function showProductDetails(id) {
 function closeModal() { document.getElementById('productModal').classList.remove('active'); }
 
 async function saveProduct() {
+  const unitCountRaw = document.getElementById('editUnitCount').value;
+  const unitTypeRaw = document.getElementById('editUnitType').value;
   await fetch(API+'/api/products/'+currentProductId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     name:document.getElementById('editName').value,
     brand:document.getElementById('editBrand').value,
     category:document.getElementById('editCategory').value,
     subcategory:document.getElementById('editSubcategory').value,
+    unitCount: unitCountRaw === '' ? null : parseInt(unitCountRaw, 10),
+    unitType: unitTypeRaw === '' ? null : unitTypeRaw,
     imageUrl:document.getElementById('editImageUrl').value
   })});
   alert('Saved!'); loadProducts(currentPage);
