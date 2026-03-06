@@ -594,10 +594,23 @@ async function extractProductData(page, categoryInfo = null) {
     const secondaryNorm = secondaryText.toLowerCase().replace(/\s+/g, '');
     pricePerKg = extractPriceNumber(secondaryText);
 
-    // Extract unit count (e.g. "60 Un | 0,28 €/Un")
+    // Extract unit count (e.g. "emb. 64 un", "64 un", "64 unidades")
     let unitCount = null;
-    const unitCountMatch = secondaryText.match(/(\d+)\s*un\b/i);
-    if (unitCountMatch) unitCount = parseInt(unitCountMatch[1], 10);
+    const extractUnitCount = (s) => {
+      if (!s) return null;
+      const txt = String(s);
+      const patterns = [
+        /(?:emb\.?|pack|pack\s+poupan[çc]a|caixa|cx\.?)\s*(\d{1,4})\s*(?:un|unid(?:ades)?|unidades?)\b/i,
+        /(\d{1,4})\s*(?:un|unid(?:ades)?|unidades?)\b/i,
+      ];
+      for (const p of patterns) {
+        const m = txt.match(p);
+        if (m) return parseInt(m[1], 10);
+      }
+      return null;
+    };
+
+    unitCount = extractUnitCount(secondaryText);
 
     // Determine unit (kg, l/lt, un)
     if (secondaryNorm.includes('/kg')) priceUnit = 'kg';
@@ -644,8 +657,7 @@ async function extractProductData(page, categoryInfo = null) {
 
     // Fallback unit count extraction from page text
     if (!unitCount) {
-      const textUnitMatch = text.match(/(\d+)\s*UN\b/i);
-      if (textUnitMatch) unitCount = parseInt(textUnitMatch[1], 10);
+      unitCount = extractUnitCount(text);
     }
     
     // Extract category from URL
