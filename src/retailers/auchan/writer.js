@@ -127,9 +127,38 @@ async function writeMatchedPrice(prisma, { product, parsed, dryRun }) {
   return { inserted: true, unchanged: false };
 }
 
+function hasAllScrapingDetails(parsed) {
+  return !!(
+    parsed?.ean &&
+    parsed?.name &&
+    parsed?.brand &&
+    parsed?.category &&
+    parsed?.subcategory &&
+    parsed?.priceCents
+  );
+}
+
+async function createProductFromParsed(prisma, parsed) {
+  return prisma.product.create({
+    data: {
+      ean: parsed.ean,
+      name: parsed.name,
+      brand: parsed.brand,
+      category: parsed.category,
+      subcategory: parsed.subcategory,
+      unitCount: Number.isInteger(parsed.unitCount) ? parsed.unitCount : null,
+      unitType: parsed.unitType || null,
+      imageUrl: parsed.imageUrl || null,
+      source: RETAILER,
+    },
+  });
+}
+
 module.exports = {
   samePrice,
   writeUnmatched,
   writeMatchedPrice,
   stageTempProductAndPrice,
+  hasAllScrapingDetails,
+  createProductFromParsed,
 };

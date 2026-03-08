@@ -5,7 +5,7 @@ const { fetchText, delay } = require('./http');
 const { fetchAllProductUrls } = require('./sitemap');
 const { parseProduct } = require('./parser');
 const { findProductByEan } = require('./matcher');
-const { writeMatchedPrice, writeUnmatched, stageTempProductAndPrice } = require('./writer');
+const { writeMatchedPrice, writeUnmatched, stageTempProductAndPrice, hasAllScrapingDetails, createProductFromParsed } = require('./writer');
 
 const prisma = new PrismaClient();
 
@@ -116,7 +116,13 @@ async function runWithJob(job, options) {
         });
         if (!opts.dryRun) await stageTempProductAndPrice(prisma, { parsed, reason: 'missing_price' });
       } else {
-        const product = await findProductByEan(prisma, parsed.ean);
+        let product = await findProductByEan(prisma, parsed.ean);
+
+        // If not matched by EAN, but we have full scraped data, create product directly
+        if (!product && hasAllScrapingDetails(parsed) && !opts.dryRun) {
+          product = await createProductFromParsed(prisma, parsed);
+        }
+
         if (!product) {
           stats.unmatched++;
           await writeUnmatched(prisma, {
