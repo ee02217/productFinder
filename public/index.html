@@ -489,6 +489,7 @@ async function showProductDetails(id) {
   document.getElementById('modalTitle').textContent = p.name||'Product Details';
   document.getElementById('productInfo').innerHTML = 
     '<div class="product-info-item"><label>EAN</label><span>'+(p.ean||'-')+'</span></div>'+
+    '<div class="product-info-item"><label>Supermarket</label><span>'+(p.source||'-')+'</span></div>'+
     '<div class="product-info-item"><label>Name</label><input id="editName" value="'+(p.name||'')+'"></div>'+
     '<div class="product-info-item"><label>Brand</label><input id="editBrand" value="'+(p.brand||'')+'"></div>'+
     '<div class="product-info-item"><label>Category</label><input id="editCategory" value="'+(p.category||'')+'"></div>'+
