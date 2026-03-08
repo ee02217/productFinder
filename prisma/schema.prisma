@@ -30,16 +30,18 @@ model Product {
 model Price {
   id          String   @id @default(uuid())
   productId   String
+  retailer    String   @default("continente") // source per price row
   priceCents  Int
   currency    String   @default("EUR")
   pvpCents    Int?
   pricePerKgCents Int?
-  priceUnit   String?  // 'kg' or 'l' (liter)
+  priceUnit   String?  // 'kg' | 'l' | 'un'
   capturedAt  DateTime @default(now())
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@index([capturedAt])
+  @@index([productId, retailer, capturedAt])
 }
 
 model ScrapeJob {

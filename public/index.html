@@ -214,7 +214,7 @@
       <button class="btn btn-danger" onclick="deleteProduct()">Delete Product</button>
       <h3 style="margin-top:1rem;">Price History</h3>
       <table class="price-table">
-        <thead><tr><th>Date</th><th>Price</th><th>Price/kg/l</th><th>PVP</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Supermarket</th><th>Price</th><th>Price/kg/l</th><th>PVP</th><th></th></tr></thead>
         <tbody id="priceHistoryTable"></tbody>
       </table>
     </div>
@@ -489,7 +489,6 @@ async function showProductDetails(id) {
   document.getElementById('modalTitle').textContent = p.name||'Product Details';
   document.getElementById('productInfo').innerHTML = 
     '<div class="product-info-item"><label>EAN</label><span>'+(p.ean||'-')+'</span></div>'+
-    '<div class="product-info-item"><label>Supermarket</label><span>'+(p.source||'-')+'</span></div>'+
     '<div class="product-info-item"><label>Name</label><input id="editName" value="'+(p.name||'')+'"></div>'+
     '<div class="product-info-item"><label>Brand</label><input id="editBrand" value="'+(p.brand||'')+'"></div>'+
     '<div class="product-info-item"><label>Category</label><input id="editCategory" value="'+(p.category||'')+'"></div>'+
@@ -498,10 +497,10 @@ async function showProductDetails(id) {
     '<div class="product-info-item"><label>Unit Type</label><input id="editUnitType" value="'+(p.unitType||'')+'" placeholder="un | ml | g"></div>'+
     '<div class="product-info-item"><label>Image URL</label><input id="editImageUrl" value="'+(p.imageUrl||'')+'"></div>';
   const tbody = document.getElementById('priceHistoryTable');
-  if(!p.prices||!p.prices.length) { tbody.innerHTML='<tr><td colspan="5" class="no-history">No price history</td></tr>'; }
+  if(!p.prices||!p.prices.length) { tbody.innerHTML='<tr><td colspan="6" class="no-history">No price history</td></tr>'; }
   else {
     tbody.innerHTML = p.prices.map(pr =>
-      '<tr><td>'+new Date(pr.capturedAt).toLocaleString()+'</td><td class="price">'+(pr.priceCents/100).toFixed(2)+' €</td><td>'+(pr.pricePerKgCents?(pr.pricePerKgCents/100).toFixed(2)+' €/'+(pr.priceUnit||'kg'):'-')+'</td><td>'+(pr.pvpCents?(pr.pvpCents/100).toFixed(2)+' €':'-')+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deletePrice(\''+pr.id+'\')">X</button></td></tr>'
+      '<tr><td>'+new Date(pr.capturedAt).toLocaleString()+'</td><td>'+(pr.retailer||p.source||'-')+'</td><td class="price">'+(pr.priceCents/100).toFixed(2)+' €</td><td>'+(pr.pricePerKgCents?(pr.pricePerKgCents/100).toFixed(2)+' €/'+(pr.priceUnit||'kg'):'-')+'</td><td>'+(pr.pvpCents?(pr.pvpCents/100).toFixed(2)+' €':'-')+'</td><td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deletePrice(\''+pr.id+'\')">X</button></td></tr>'
     ).join('');
   }
   document.getElementById('productModal').classList.add('active');

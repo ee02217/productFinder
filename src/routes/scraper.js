@@ -339,7 +339,7 @@ router.post('/product', async (req, res) => {
 
     if (data.price) {
       const latestPrice = await prisma.price.findFirst({
-        where: { productId: product.id },
+        where: { productId: product.id, retailer: 'continente' },
         orderBy: { capturedAt: 'desc' },
       });
 
@@ -370,6 +370,7 @@ router.post('/product', async (req, res) => {
           await prisma.price.create({
             data: {
               productId: product.id,
+              retailer: 'continente',
               priceCents: newPriceCents,
               pricePerKgCents: newPricePerKgCents,
               priceUnit: newPriceUnit,
@@ -381,7 +382,8 @@ router.post('/product', async (req, res) => {
         await prisma.price.create({
           data: {
             productId: product.id,
-            priceCents: newPriceCents,
+            retailer: 'continente',
+              priceCents: newPriceCents,
             pricePerKgCents: newPricePerKgCents,
             priceUnit: newPriceUnit,
             pvpCents: newPvpCents,
@@ -973,7 +975,7 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
             // Add price only if meaningfully different from latest
             if (data.price) {
               const latestPrice = await prisma.price.findFirst({
-                where: { productId: product.id },
+                where: { productId: product.id, retailer: 'continente' },
                 orderBy: { capturedAt: 'desc' },
               });
 
@@ -1007,7 +1009,8 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
                   await prisma.price.create({
                     data: {
                       productId: product.id,
-                      priceCents: newPriceCents,
+                      retailer: 'continente',
+              priceCents: newPriceCents,
                       pricePerKgCents: newPricePerKgCents,
                       priceUnit: newPriceUnit,
                       pvpCents: newPvpCents,
@@ -1018,7 +1021,8 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
                 await prisma.price.create({
                   data: {
                     productId: product.id,
-                    priceCents: newPriceCents,
+                    retailer: 'continente',
+              priceCents: newPriceCents,
                     pricePerKgCents: newPricePerKgCents,
                     priceUnit: newPriceUnit,
                     pvpCents: newPvpCents,
