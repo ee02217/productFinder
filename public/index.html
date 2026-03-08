@@ -237,8 +237,8 @@
           <button class="btn btn-secondary" onclick="loadTempProducts()">Refresh</button>
         </div>
         <table class="products-table">
-          <thead><tr><th>Retailer</th><th>EAN</th><th>Name</th><th>Latest Price</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
-          <tbody id="tempProductsTable"><tr><td colspan="7">Loading...</td></tr></tbody>
+          <thead><tr><th>Retailer</th><th>EAN</th><th>Name</th><th>Brand</th><th>Category</th><th>Qty</th><th>Pack</th><th>Latest Price</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
+          <tbody id="tempProductsTable"><tr><td colspan="11">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -482,7 +482,7 @@ async function deleteCategory(id) {
 async function loadTempProducts() {
   const tbody = document.getElementById('tempProductsTable');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11">Loading...</td></tr>';
   try {
     const retailer = document.getElementById('tempRetailerFilter')?.value || 'auchan';
     const status = document.getElementById('tempStatusFilter')?.value || 'pending';
@@ -493,14 +493,18 @@ async function loadTempProducts() {
     tbody.innerHTML = rows.map(r => {
       const latest = (r.prices && r.prices[0]) ? r.prices[0] : null;
       const latestPrice = latest ? `${(latest.priceCents/100).toFixed(2)} €` : '-';
+      const qty = (Number.isInteger(r.unitCount) ? `${r.unitCount}${r.unitType ? ' ' + r.unitType : ''}` : '-');
+      const pack = (Number.isInteger(r.packCount) && Number.isFinite(r.packUnitSize))
+        ? `${r.packCount}x${r.packUnitSize}${r.packUnitType ? r.packUnitType : ''}`
+        : '-';
       const actions = r.status === 'pending'
         ? `<button class="btn btn-primary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="approveTempProduct('${r.id}')">Approve</button>` +
           `<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="rejectTempProduct('${r.id}')">Reject</button>`
         : '-';
-      return `<tr><td>${r.retailer}</td><td>${r.ean||'-'}</td><td>${r.name||'-'}</td><td>${latestPrice}</td><td>${r.status}</td><td>${new Date(r.updatedAt).toLocaleString()}</td><td>${actions}</td></tr>`;
-    }).join('') || '<tr><td colspan="7">No staged unmatched products</td></tr>';
+      return `<tr><td>${r.retailer}</td><td>${r.ean||'-'}</td><td>${r.name||'-'}</td><td>${r.brand||'-'}</td><td>${(r.category||'-')}${r.subcategory?(' > '+r.subcategory):''}</td><td>${qty}</td><td>${pack}</td><td>${latestPrice}</td><td>${r.status}</td><td>${new Date(r.updatedAt).toLocaleString()}</td><td>${actions}</td></tr>`;
+    }).join('') || '<tr><td colspan="11">No staged unmatched products</td></tr>';
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11">Error: ${e.message}</td></tr>`;
   }
 }
 

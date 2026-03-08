@@ -98,20 +98,23 @@ model RetailerUnmatched {
 }
 
 model TempProduct {
-  id          String   @id @default(uuid())
-  retailer    String
-  sourceUrl   String   @unique
-  ean         String?
-  name        String?
-  brand       String?
-  category    String?
-  subcategory String?
-  unitCount   Int?
-  unitType    String?
-  imageUrl    String?
-  status      String   @default("pending") // pending|approved|rejected|imported
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  retailer     String
+  sourceUrl    String   @unique
+  ean          String?
+  name         String?
+  brand        String?
+  category     String?
+  subcategory  String?
+  unitCount    Int?
+  unitType     String?
+  packCount    Int?
+  packUnitSize Float?
+  packUnitType String?
+  imageUrl     String?
+  status       String   @default("pending") // pending|approved|rejected|imported
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   prices      TempPrice[]
 
