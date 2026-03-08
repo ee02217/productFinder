@@ -104,7 +104,8 @@ async function runWithJob(job, options) {
           name: parsed.name,
           reason: 'missing_ean',
         });
-        if (!opts.dryRun) await stageTempProductAndPrice(prisma, { parsed, reason: 'missing_ean' });
+        // Stage only if we have minimum identity (name)
+        if (!opts.dryRun && parsed.name) await stageTempProductAndPrice(prisma, { parsed, reason: 'missing_ean' });
       } else if (!parsed.priceCents) {
         stats.unmatched++;
         await writeUnmatched(prisma, {
@@ -114,7 +115,8 @@ async function runWithJob(job, options) {
           name: parsed.name,
           reason: 'missing_price',
         });
-        if (!opts.dryRun) await stageTempProductAndPrice(prisma, { parsed, reason: 'missing_price' });
+        // Stage only if we have minimum identity (name)
+        if (!opts.dryRun && parsed.name) await stageTempProductAndPrice(prisma, { parsed, reason: 'missing_price' });
       } else {
         let product = await findProductByEan(prisma, parsed.ean);
 
@@ -132,7 +134,8 @@ async function runWithJob(job, options) {
             name: parsed.name,
             reason: 'ean_not_found',
           });
-          if (!opts.dryRun) await stageTempProductAndPrice(prisma, { parsed, reason: 'ean_not_found' });
+          // Stage only if we have minimum identity (name)
+          if (!opts.dryRun && parsed.name) await stageTempProductAndPrice(prisma, { parsed, reason: 'ean_not_found' });
         } else {
           stats.matched++;
           const result = await writeMatchedPrice(prisma, { product, parsed, dryRun: opts.dryRun });
@@ -149,6 +152,7 @@ async function runWithJob(job, options) {
         name: null,
         reason: `fetch_or_parse_error:${err.message.slice(0, 120)}`,
       });
+      // Do not stage hard parse failures without name
     }
 
     cursor = idx + 1;
