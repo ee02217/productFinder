@@ -91,6 +91,11 @@ async function stageTempProductAndPrice(prisma, { parsed, reason }) {
   return tempProduct;
 }
 
+function looksAllCaps(txt) {
+  if (!txt) return false;
+  return /^[A-ZÀ-Ý0-9\s'’.,\-]+$/.test(String(txt));
+}
+
 async function writeMatchedPrice(prisma, { product, parsed, dryRun }) {
   const latest = await prisma.price.findFirst({
     where: { productId: product.id, retailer: RETAILER },
@@ -113,13 +118,27 @@ async function writeMatchedPrice(prisma, { product, parsed, dryRun }) {
       },
     });
 
-    if (Number.isInteger(parsed.unitCount) && parsed.unitType) {
+    // Metadata enrichment for matched products (conservative)
+    const productPatch = {
+      ...(Number.isInteger(parsed.unitCount) && product.unitCount == null ? { unitCount: parsed.unitCount } : {}),
+      ...(parsed.unitType && product.unitType == null ? { unitType: parsed.unitType } : {}),
+      ...(parsed.category && !product.category ? { category: parsed.category } : {}),
+      ...(parsed.subcategory && !product.subcategory ? { subcategory: parsed.subcategory } : {}),
+      ...(parsed.imageUrl && !product.imageUrl ? { imageUrl: parsed.imageUrl } : {}),
+    };
+
+    // Normalize uppercase legacy names/brands or auchan-sourced products
+    if (parsed.name && (product.source === RETAILER || !product.source || looksAllCaps(product.name))) {
+      productPatch.name = parsed.name;
+    }
+    if (parsed.brand && (product.source === RETAILER || !product.source || looksAllCaps(product.brand) || !product.brand)) {
+      productPatch.brand = parsed.brand;
+    }
+
+    if (Object.keys(productPatch).length > 0) {
       await prisma.product.update({
         where: { id: product.id },
-        data: {
-          ...(product.unitCount == null ? { unitCount: parsed.unitCount } : {}),
-          ...(product.unitType == null ? { unitType: parsed.unitType } : {}),
-        },
+        data: productPatch,
       });
     }
   }

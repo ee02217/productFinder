@@ -129,6 +129,34 @@ function parseBreadcrumbs(html) {
   return crumbs;
 }
 
+function toTitleCase(str) {
+  if (!str) return str;
+  const lower = String(str).toLocaleLowerCase('pt-PT');
+  return lower.replace(/(^|[\s\-\/])(\p{L})/gu, (m, sep, ch) => `${sep}${ch.toLocaleUpperCase('pt-PT')}`);
+}
+
+function stripTrailingQuantity(name) {
+  if (!name) return name;
+  let s = String(name).trim();
+  const patterns = [
+    /\s+(?:\d+\s*[x×]\s*)?\d+(?:[.,]\d+)?\s*(?:kg|g|gr|ml|cl|l|un)\s*$/i,
+    /\s+\d+\s*(?:un|unid(?:ades)?|unidades?)\s*$/i,
+  ];
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const p of patterns) {
+      const next = s.replace(p, '');
+      if (next !== s) {
+        s = next.trim();
+        changed = true;
+      }
+    }
+  }
+  return s;
+}
+
 function parseProduct(html, url) {
   const jsonLd = parseJsonLdProduct(html);
 
@@ -138,12 +166,12 @@ function parseProduct(html, url) {
     html.match(/Ref\.\s*\/\s*EAN:[\s\S]{0,120}?>(\d{8,14})</i)?.[1] ||
     null;
 
-  const name =
+  const rawName =
     (jsonLd && jsonLd.name) ||
     html.match(/<h1[^>]*class="[^"]*product-name[^"]*"[^>]*>([^<]+)<\/h1>/i)?.[1] ||
     null;
 
-  const brand =
+  const rawBrand =
     (jsonLd && (typeof jsonLd.brand === 'string' ? jsonLd.brand : jsonLd.brand?.name)) ||
     null;
 
@@ -163,12 +191,18 @@ function parseProduct(html, url) {
 
   const { pricePerKgCents, priceUnit } = parsePerUnit(html);
 
-  // quantity precedence: Quantidade Líquida > multipack from name/url
+  const decodedRawName = rawName ? decodeHtmlEntities(String(rawName)) : null;
+  const decodedRawBrand = rawBrand ? decodeHtmlEntities(String(rawBrand)) : null;
+
+  // quantity precedence: Quantidade Líquida > multipack from raw name/url
   const qtyLiquida = parseQuantidadeLiquida(html);
-  const multipack = parseMultipack(name || url);
+  const multipack = parseMultipack(decodedRawName || url);
 
   const unitCount = qtyLiquida?.unitCount ?? multipack?.total?.unitCount ?? null;
   const unitType = qtyLiquida?.unitType ?? multipack?.total?.unitType ?? null;
+
+  const cleanName = decodedRawName ? toTitleCase(stripTrailingQuantity(decodedRawName)) : null;
+  const cleanBrand = decodedRawBrand ? toTitleCase(decodedRawBrand) : null;
 
   const crumbs = parseBreadcrumbs(html);
   const category = crumbs.length >= 2 ? crumbs[1] : (crumbs[0] || null);
@@ -177,8 +211,8 @@ function parseProduct(html, url) {
   return {
     url,
     ean: ean ? String(ean).trim() : null,
-    name: name ? decodeHtmlEntities(String(name)) : null,
-    brand: brand ? decodeHtmlEntities(String(brand)) : null,
+    name: cleanName,
+    brand: cleanBrand,
     imageUrl: imageUrl || null,
     category: category || null,
     subcategory: subcategory || null,
