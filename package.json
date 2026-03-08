@@ -8,7 +8,8 @@
     "dev": "nodemon src/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "scrape:auchan": "node src/retailers/auchan.js"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
