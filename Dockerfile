@@ -17,6 +17,7 @@ RUN npx prisma generate
 
 # Copy app
 COPY src ./src/
+COPY scripts ./scripts/
 COPY public ./public/
 
 # Copy VPN config

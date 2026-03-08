@@ -84,6 +84,7 @@
       <button class="tab active" onclick="showTab('products')">📦 Products</button>
       <button class="tab" onclick="showTab('scrape')">🚀 Scrape</button>
       <button class="tab" onclick="showTab('categories')">📂 Categories</button>
+      <button class="tab" onclick="showTab('unmatched')">🧪 Unmatched</button>
       <button class="tab" onclick="showTab('settings')">⚙️ Settings</button>
     </div>
     
@@ -148,6 +149,32 @@
       </div>
       
       <div class="card">
+        <h2>🛒 Auchan Retailer Jobs</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Limit (default 500)</label>
+            <input type="number" id="auchanLimit" value="500" min="0" style="width:120px;">
+          </div>
+          <div class="form-group">
+            <label>Delay (ms)</label>
+            <input type="number" id="auchanDelay" value="400" min="0" style="width:120px;">
+          </div>
+          <div class="form-group">
+            <label>Dry run</label>
+            <input type="checkbox" id="auchanDryRun">
+          </div>
+          <button class="btn btn-primary" onclick="startAuchanScrape()">Start Auchan</button>
+          <button class="btn btn-danger" onclick="stopAuchanScrape()">Stop Auchan</button>
+          <button class="btn btn-secondary" onclick="loadAuchanJobs()">Refresh</button>
+        </div>
+        <div id="auchanStatus" style="margin:0.5rem 0;color:#666;">Loading...</div>
+        <table class="products-table">
+          <thead><tr><th>Started</th><th>Status</th><th>Processed/Total</th><th>Matched</th><th>Unmatched</th><th>Inserted</th><th>Errors</th><th></th></tr></thead>
+          <tbody id="auchanJobsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="card">
         <h2>🔍 Test URL</h2>
         <div class="form-row">
           <input type="text" id="testUrl" placeholder="https://www.continente.pt/..." style="flex:1;padding:0.5rem;">
@@ -187,6 +214,35 @@
       </div>
     </div>
     
+    <!-- Unmatched/Staging Tab -->
+    <div id="tab-unmatched" class="tab-content">
+      <div class="card">
+        <h2>🧪 Unmatched Staging</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Retailer</label>
+            <select id="tempRetailerFilter" style="width:140px;">
+              <option value="auchan">Auchan</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="tempStatusFilter" style="width:140px;">
+              <option value="pending">pending</option>
+              <option value="approved">approved</option>
+              <option value="rejected">rejected</option>
+              <option value="all">all</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" onclick="loadTempProducts()">Refresh</button>
+        </div>
+        <table class="products-table">
+          <thead><tr><th>Retailer</th><th>EAN</th><th>Name</th><th>Latest Price</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
+          <tbody id="tempProductsTable"><tr><td colspan="7">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Settings Tab -->
     <div id="tab-settings" class="tab-content">
       <div class="card">
@@ -233,6 +289,7 @@ function showTab(tabId) {
   if (tabId === 'products') loadProducts(1);
   if (tabId === 'scrape') loadScrapeOptions();
   if (tabId === 'categories') loadCategories();
+  if (tabId === 'unmatched') loadTempProducts();
   if (tabId === 'settings') loadSettings();
 }
 
@@ -422,6 +479,55 @@ async function deleteCategory(id) {
   } catch(e) { alert('Error: '+e.message); }
 }
 
+async function loadTempProducts() {
+  const tbody = document.getElementById('tempProductsTable');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
+  try {
+    const retailer = document.getElementById('tempRetailerFilter')?.value || 'auchan';
+    const status = document.getElementById('tempStatusFilter')?.value || 'pending';
+    const res = await fetch(API+`/api/temp-products?retailer=${encodeURIComponent(retailer)}&status=${encodeURIComponent(status)}&limit=500`);
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || 'Failed to load temp products');
+
+    tbody.innerHTML = rows.map(r => {
+      const latest = (r.prices && r.prices[0]) ? r.prices[0] : null;
+      const latestPrice = latest ? `${(latest.priceCents/100).toFixed(2)} €` : '-';
+      const actions = r.status === 'pending'
+        ? `<button class="btn btn-primary" style="padding:2px 6px;font-size:0.8rem;margin-right:4px" onclick="approveTempProduct('${r.id}')">Approve</button>` +
+          `<button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="rejectTempProduct('${r.id}')">Reject</button>`
+        : '-';
+      return `<tr><td>${r.retailer}</td><td>${r.ean||'-'}</td><td>${r.name||'-'}</td><td>${latestPrice}</td><td>${r.status}</td><td>${new Date(r.updatedAt).toLocaleString()}</td><td>${actions}</td></tr>`;
+    }).join('') || '<tr><td colspan="7">No staged unmatched products</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function approveTempProduct(id) {
+  if (!confirm('Approve and import this staged product/prices into real tables?')) return;
+  try {
+    const res = await fetch(API+`/api/temp-products/${id}/approve`, { method:'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Approve failed');
+    loadTempProducts();
+  } catch (e) {
+    alert('Error: '+e.message);
+  }
+}
+
+async function rejectTempProduct(id) {
+  if (!confirm('Reject this staged product?')) return;
+  try {
+    const res = await fetch(API+`/api/temp-products/${id}/reject`, { method:'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Reject failed');
+    loadTempProducts();
+  } catch (e) {
+    alert('Error: '+e.message);
+  }
+}
+
 async function seedSubSubCategories() {
   const status = document.getElementById('categoryStatus');
   status.textContent = 'Seeding sub-sub categories...';
@@ -601,6 +707,79 @@ async function stopScraping() {
   checkStatus();
 }
 
+async function startAuchanScrape() {
+  try {
+    const limit = parseInt(document.getElementById('auchanLimit').value || '500', 10);
+    const delayMs = parseInt(document.getElementById('auchanDelay').value || '400', 10);
+    const dryRun = !!document.getElementById('auchanDryRun').checked;
+    const res = await fetch(API+'/api/retailers/auchan/start', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ limit, delayMs, dryRun })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Failed to start Auchan scrape');
+    await loadAuchanJobs();
+  } catch (e) {
+    alert('Auchan start error: '+e.message);
+  }
+}
+
+async function stopAuchanScrape() {
+  try {
+    await fetch(API+'/api/retailers/auchan/stop', { method:'POST' });
+    await loadAuchanJobs();
+  } catch (e) {
+    alert('Auchan stop error: '+e.message);
+  }
+}
+
+async function resumeAuchanJob(jobId) {
+  try {
+    const delayMs = parseInt(document.getElementById('auchanDelay').value || '400', 10);
+    const res = await fetch(API+`/api/retailers/auchan/resume/${jobId}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ delayMs })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Failed to resume job');
+    await loadAuchanJobs();
+  } catch (e) {
+    alert('Auchan resume error: '+e.message);
+  }
+}
+
+async function loadAuchanJobs() {
+  try {
+    const [statusRes, jobsRes] = await Promise.all([
+      fetch(API+'/api/retailers/auchan/status'),
+      fetch(API+'/api/retailers/auchan/jobs?limit=20')
+    ]);
+    const status = await statusRes.json();
+    const jobs = await jobsRes.json();
+
+    const statusEl = document.getElementById('auchanStatus');
+    if (statusEl) {
+      const latest = status.latestJob;
+      const latestTxt = latest ? `latest=${latest.status}, matched=${latest.matched}, unmatched=${latest.unmatched}, inserted=${latest.insertedPrices}` : 'no runs yet';
+      statusEl.textContent = `Running: ${status.running ? 'yes' : 'no'} | ${latestTxt}`;
+    }
+
+    const tbody = document.getElementById('auchanJobsTable');
+    if (!tbody) return;
+    const icon = { pending:'⏳', running:'🔄', completed:'✅', failed:'❌', canceled:'⏹️' };
+    tbody.innerHTML = (jobs || []).map(j => {
+      const canResume = ['failed','canceled','pending'].includes(j.status);
+      const action = canResume ? `<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem" onclick="resumeAuchanJob('${j.id}')">Resume</button>` : '';
+      return `<tr><td>${new Date(j.startedAt).toLocaleString()}</td><td>${icon[j.status]||''} ${j.status}</td><td>${j.processed}/${j.totalUrls}</td><td>${j.matched}</td><td>${j.unmatched}</td><td>${j.insertedPrices}</td><td>${j.errors}</td><td>${action}</td></tr>`;
+    }).join('') || '<tr><td colspan="8">No Auchan jobs yet</td></tr>';
+  } catch (e) {
+    const tbody = document.getElementById('auchanJobsTable');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8">Error loading Auchan jobs</td></tr>';
+  }
+}
+
 async function checkStatus() {
   try {
     const res = await fetch(API+'/api/scraper/status');
@@ -644,8 +823,8 @@ async function loadCategoryFilter() {
   } catch(e) { console.error(e); }
 }
 
-loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter(); loadScrapeQueue();
-setInterval(()=>{if(scraperStatus&&scraperStatus.isScraping){checkStatus();loadStats();loadScrapeQueue();}checkVpnStatus();},2000);
+loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter(); loadScrapeQueue(); loadAuchanJobs(); loadTempProducts();
+setInterval(()=>{if(scraperStatus&&scraperStatus.isScraping){checkStatus();loadStats();loadScrapeQueue();}loadAuchanJobs();checkVpnStatus();},4000);
 document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter')loadProducts(1)});
 </script>
 </body>

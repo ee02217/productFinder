@@ -59,6 +59,80 @@ model ScrapeJob {
   delayMs     Int      @default(2000)
 }
 
+model RetailerScrapeJob {
+  id            String   @id @default(uuid())
+  retailer      String   // e.g. 'auchan'
+  status        String   @default("pending") // pending|running|completed|failed|canceled
+  dryRun        Boolean  @default(false)
+  cursor        Int      @default(0) // URL index cursor
+  totalUrls     Int      @default(0)
+  processed     Int      @default(0)
+  matched       Int      @default(0)
+  unmatched     Int      @default(0)
+  insertedPrices Int     @default(0)
+  unchanged     Int      @default(0)
+  errors        Int      @default(0)
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  unmatchedRows RetailerUnmatched[]
+
+  @@index([retailer, status, startedAt])
+}
+
+model RetailerUnmatched {
+  id          String   @id @default(uuid())
+  retailer    String
+  url         String
+  ean         String?
+  name        String?
+  reason      String
+  jobId       String
+  createdAt   DateTime @default(now())
+
+  job RetailerScrapeJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([retailer, createdAt])
+  @@index([jobId])
+  @@index([ean])
+}
+
+model TempProduct {
+  id          String   @id @default(uuid())
+  retailer    String
+  sourceUrl   String   @unique
+  ean         String?
+  name        String?
+  brand       String?
+  category    String?
+  subcategory String?
+  unitCount   Int?
+  unitType    String?
+  imageUrl    String?
+  status      String   @default("pending") // pending|approved|rejected|imported
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  prices      TempPrice[]
+
+  @@index([retailer, status, createdAt])
+  @@index([ean])
+}
+
+model TempPrice {
+  id              String   @id @default(uuid())
+  tempProductId   String
+  priceCents      Int
+  pvpCents        Int?
+  pricePerKgCents Int?
+  priceUnit       String?
+  capturedAt      DateTime @default(now())
+
+  tempProduct TempProduct @relation(fields: [tempProductId], references: [id], onDelete: Cascade)
+
+  @@index([tempProductId, capturedAt])
+}
+
 model Settings {
   id        String   @id @default("default")
   delayMs   Int      @default(2000)
