@@ -190,6 +190,47 @@
       </div>
 
       <div class="card">
+        <h2>🛒 Lidl Retailer Jobs</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Limit (default 500)</label>
+            <input type="number" id="lidlLimit" value="500" min="0" style="width:120px;">
+          </div>
+          <div class="form-group">
+            <label>Delay (ms)</label>
+            <input type="number" id="lidlDelay" value="400" min="0" style="width:120px;">
+          </div>
+          <div class="form-group">
+            <label>Dry run</label>
+            <input type="checkbox" id="lidlDryRun">
+          </div>
+          <button class="btn btn-primary" onclick="startLidlScrape()">Start Lidl</button>
+          <button class="btn btn-danger" onclick="stopLidlScrape()">Stop Lidl</button>
+          <button class="btn btn-secondary" onclick="loadLidlJobs()">Refresh</button>
+        </div>
+        <div id="lidlStatus" style="margin:0.5rem 0;color:#666;">Loading...</div>
+        <table class="products-table">
+          <thead><tr><th>Started</th><th>Status</th><th>Processed/Total</th><th>Matched</th><th>Unmatched</th><th>Inserted</th><th>Errors</th><th></th></tr></thead>
+          <tbody id="lidlJobsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>🧱 Lidl Category Blocklist</h2>
+        <p style="color:#666;margin-top:-0.25rem;">Block categories to ignore in future Lidl scrapes. Blocking auto-purges existing Lidl products in that row.</p>
+        <div class="form-row">
+          <button class="btn btn-secondary" onclick="loadLidlCategoriesTab()">Refresh</button>
+          <button class="btn btn-secondary" onclick="toggleSelectAllLidlCategories(true)">Select all visible</button>
+          <button class="btn btn-secondary" onclick="toggleSelectAllLidlCategories(false)">Clear selection</button>
+          <button class="btn btn-danger" onclick="blockSelectedLidlCategories()">Block Selected + Purge</button>
+        </div>
+        <table class="products-table" style="margin-top:1rem;">
+          <thead><tr><th>Select</th><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
+          <tbody id="lidlCategoriesTable"><tr><td colspan="7">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="card">
         <h2>🔍 Test URL</h2>
         <div class="form-row">
           <input type="text" id="testUrl" placeholder="https://www.continente.pt/..." style="flex:1;padding:0.5rem;">
@@ -238,6 +279,7 @@
             <label>Retailer</label>
             <select id="tempRetailerFilter" style="width:140px;">
               <option value="auchan">Auchan</option>
+              <option value="lidl">Lidl</option>
             </select>
           </div>
           <div class="form-group">
@@ -902,6 +944,186 @@ async function deleteAuchanCategoryProducts(categoryEnc, subEnc) {
   }
 }
 
+// ============== LIDL SCRAPER FUNCTIONS ==============
+async function startLidlScrape() {
+  const limit = parseInt(document.getElementById('lidlLimit').value || '500', 10);
+  const delayMs = parseInt(document.getElementById('lidlDelay').value || '400', 10);
+  const dryRun = !!document.getElementById('lidlDryRun').checked;
+  const res = await fetch(API+'/api/retailers/lidl/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ limit, delayMs, dryRun })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + data.error); return; }
+  document.getElementById('lidlStatus').textContent = 'Started job ' + data.jobId;
+  loadLidlJobs();
+}
+
+async function stopLidlScrape() {
+  await fetch(API+'/api/retailers/lidl/stop', { method:'POST' });
+  document.getElementById('lidlStatus').textContent = 'Stopping...';
+  setTimeout(loadLidlJobs, 1000);
+}
+
+async function loadLidlJobs() {
+  try {
+    const [statusRes, jobsRes] = await Promise.all([
+      fetch(API+'/api/retailers/lidl/status'),
+      fetch(API+'/api/retailers/lidl/jobs?limit=20')
+    ]);
+    const status = await statusRes.json();
+    const jobs = await jobsRes.json();
+
+    const statusEl = document.getElementById('lidlStatus');
+    if (status.running) {
+      const j = status.latestJob;
+      statusEl.textContent = `Running: ${j?.processed || 0}/${j?.totalUrls || '?'} processed, ${j?.matched || 0} matched`;
+      setTimeout(loadLidlJobs, 3000);
+    } else {
+      const last = jobs[0];
+      statusEl.textContent = last ? `Last: ${last.status} (${last.processed}/${last.totalUrls})` : 'Idle';
+    }
+
+    const tbody = document.getElementById('lidlJobsTable');
+    if (!jobs.length) { tbody.innerHTML = '<tr><td colspan="8">No jobs yet</td></tr>'; return; }
+    tbody.innerHTML = jobs.map(j => `
+      <tr>
+        <td>${j.startedAt ? new Date(j.startedAt).toLocaleString() : '-'}</td>
+        <td><span class="badge badge-${j.status === 'completed' ? 'success' : j.status === 'failed' ? 'danger' : j.status === 'running' ? 'primary' : 'secondary'}">${j.status}</span></td>
+        <td>${j.processed}/${j.totalUrls}</td>
+        <td>${j.matched}</td>
+        <td>${j.unmatched}</td>
+        <td>${j.insertedPrices}</td>
+        <td>${j.errors}</td>
+        <td>${j.status === 'failed' || j.status === 'canceled' ? `<button class="btn btn-small" onclick="resumeLidlJob('${j.id}')">Resume</button>` : ''}</td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    document.getElementById('lidlStatus').textContent = 'Error: ' + e.message;
+  }
+}
+
+async function resumeLidlJob(jobId) {
+  const delayMs = parseInt(document.getElementById('lidlDelay').value || '400', 10);
+  const res = await fetch(API+`/api/retailers/lidl/resume/${jobId}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ delayMs })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + data.error); return; }
+  document.getElementById('lidlStatus').textContent = 'Resumed job ' + jobId;
+  loadLidlJobs();
+}
+
+async function loadLidlCategoriesTab() {
+  const tbody = document.getElementById('lidlCategoriesTable');
+  try {
+    const res = await fetch(API+'/api/retailers/lidl/categories');
+    const rows = await res.json();
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7">No categories found</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => {
+      const keyCategory = encodeURIComponent(r.category || '');
+      const keySub = encodeURIComponent(r.subcategory || '');
+      return `
+        <tr>
+          <td><input type="checkbox" class="lidl-block-select" data-category="${keyCategory}" data-subcategory="${keySub}"></td>
+          <td>${r.category || '-'}</td>
+          <td>${r.subcategory || '-'}</td>
+          <td>${r.productCount}</td>
+          <td>${r.lastSeenAt ? new Date(r.lastSeenAt).toLocaleDateString() : '-'}</td>
+          <td><span class="badge badge-${r.blocked ? 'danger' : 'success'}">${r.blocked ? 'Yes' : 'No'}</span></td>
+          <td>
+            ${r.blocked 
+              ? `<button class="btn btn-small btn-secondary" onclick="unblockLidlCategory('${keyCategory}','${keySub}')">Unblock</button>`
+              : `<button class="btn btn-small btn-danger" onclick="blockLidlCategory('${keyCategory}','${keySub}')">Block</button>`
+            }
+            <button class="btn btn-small btn-secondary" onclick="deleteLidlCategoryProducts('${keyCategory}','${keySub}')">🗑</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch(e) { tbody.innerHTML = '<tr><td colspan="7">Error: '+e.message+'</td></tr>'; }
+}
+
+function toggleSelectAllLidlCategories(checked) {
+  document.querySelectorAll('.lidl-block-select').forEach(el => { el.checked = !!checked; });
+}
+
+async function blockSelectedLidlCategories() {
+  const selected = Array.from(document.querySelectorAll('.lidl-block-select:checked')).map(el => ({
+    category: decodeURIComponent(el.dataset.category || ''),
+    subcategory: el.dataset.subcategory ? decodeURIComponent(el.dataset.subcategory) : null
+  }));
+  if (!selected.length) { alert('Select at least one'); return; }
+  const res = await fetch(API+'/api/retailers/lidl/categories/block-bulk', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ items: selected, blocked: true })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + data.error); return; }
+  alert(`Blocked ${data.affected} categories, deleted ${data.deletedProducts} products`);
+  await loadLidlCategoriesTab();
+}
+
+async function blockLidlCategory(categoryEnc, subEnc) {
+  const category = decodeURIComponent(categoryEnc || '');
+  const subcategory = subEnc ? decodeURIComponent(subEnc) : null;
+  if (!confirm(`Block ${category}${subcategory ? ' > ' + subcategory : ''}?`)) return;
+
+  try {
+    const res = await fetch(API+'/api/retailers/lidl/categories/block', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, subcategory, blocked: true })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Block failed');
+    alert(`Blocked, deleted ${data.deletedProducts} products`);
+    await loadLidlCategoriesTab();
+  } catch(e) { alert('Block error: '+e.message); }
+}
+
+async function unblockLidlCategory(categoryEnc, subEnc) {
+  const category = decodeURIComponent(categoryEnc || '');
+  const subcategory = subEnc ? decodeURIComponent(subEnc) : null;
+
+  try {
+    const res = await fetch(API+'/api/retailers/lidl/categories/block', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, subcategory, blocked: false })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Unblock failed');
+    alert('Unblocked');
+    await loadLidlCategoriesTab();
+  } catch(e) { alert('Unblock error: '+e.message); }
+}
+
+async function deleteLidlCategoryProducts(categoryEnc, subEnc) {
+  const category = decodeURIComponent(categoryEnc || '');
+  const subcategory = decodeURIComponent(subEnc || '');
+  if (!confirm(`Delete Lidl products for ${category}${subcategory ? ' > ' + subcategory : ''}?`)) return;
+
+  try {
+    const res = await fetch(API+'/api/retailers/lidl/categories/delete-products', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, ...(subcategory ? { subcategory } : {}) })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Delete failed');
+    alert(`Deleted ${data.deletedProducts || 0} products`);
+    await loadStats();
+    await loadLidlCategoriesTab();
+  } catch (e) {
+    alert('Delete error: ' + e.message);
+  }
+}
+
 async function checkStatus() {
   try {
     const res = await fetch(API+'/api/scraper/status');
@@ -945,8 +1167,8 @@ async function loadCategoryFilter() {
   } catch(e) { console.error(e); }
 }
 
-loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter(); loadScrapeQueue(); loadAuchanJobs(); loadTempProducts(); loadAuchanCategoriesTab();
-setInterval(()=>{if(scraperStatus&&scraperStatus.isScraping){checkStatus();loadStats();loadScrapeQueue();}loadAuchanJobs();checkVpnStatus();},4000);
+loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter(); loadScrapeQueue(); loadAuchanJobs(); loadAuchanCategoriesTab(); loadLidlJobs(); loadLidlCategoriesTab(); loadTempProducts();
+setInterval(()=>{if(scraperStatus&&scraperStatus.isScraping){checkStatus();loadStats();loadScrapeQueue();}loadAuchanJobs();loadLidlJobs();checkVpnStatus();},4000);
 document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter')loadProducts(1)});
 </script>
 </body>
