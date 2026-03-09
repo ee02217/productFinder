@@ -85,6 +85,7 @@ model RetailerUnmatched {
   retailer        String
   url             String
   ean             String?
+  internalId      String?  // Source-local identity (e.g., Pingo Doce internal product ID)
   name            String?
   reason          String
   matchConfidence Float?   // Confidence score if fallback was attempted
@@ -118,6 +119,7 @@ model TempProduct {
   retailer        String
   sourceUrl       String   @unique
   ean             String?
+  internalId      String?  // Source-local identity (e.g., Pingo Doce internal product ID)
   name            String?
   brand           String?
   category        String?

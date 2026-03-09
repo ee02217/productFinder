@@ -22,6 +22,7 @@ const vpnRouter = require('./routes/vpn');
 const categoriesRouter = require('./routes/categories');
 const retailerAuchanRouter = require('./routes/retailer-auchan');
 const retailerLidlRouter = require('./routes/retailer-lidl');
+const retailerPingoDoceRouter = require('./routes/retailer-pingodoce');
 const tempProductsRouter = require('./routes/temp-products');
 
 app.use('/api/products', productsRouter);
@@ -31,6 +32,7 @@ app.use('/api/vpn', vpnRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/retailers/auchan', retailerAuchanRouter);
 app.use('/api/retailers/lidl', retailerLidlRouter);
+app.use('/api/retailers/pingodoce', retailerPingoDoceRouter);
 app.use('/api/temp-products', tempProductsRouter);
 
 app.get('/api/health', async (req, res) => {

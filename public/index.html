@@ -190,6 +190,7 @@
         <button class="sub-tab active" data-scrape-tab="continente" onclick="showScrapeSubTab('continente')">🛒 Continente</button>
         <button class="sub-tab" data-scrape-tab="auchan" onclick="showScrapeSubTab('auchan')">🛒 Auchan</button>
         <button class="sub-tab" data-scrape-tab="lidl" onclick="showScrapeSubTab('lidl')">🛒 Lidl</button>
+        <button class="sub-tab" data-scrape-tab="pingodoce" onclick="showScrapeSubTab('pingodoce')">🛒 Pingo Doce</button>
         <button class="sub-tab" data-scrape-tab="tools" onclick="showScrapeSubTab('tools')">🔧 Tools</button>
       </div>
       
@@ -316,6 +317,52 @@
       </div>
       </div><!-- End Lidl sub-tab -->
       
+      <!-- Pingo Doce Sub-tab -->
+      <div id="scrape-sub-pingodoce" class="sub-tab-content">
+      <div class="card">
+        <h2>🛒 Pingo Doce Retailer Jobs</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Limit (default 500)</label>
+            <input type="number" id="pingodoceLimit" value="500" min="0" style="width:120px;">
+          </div>
+          <div class="form-group">
+            <label>Delay (ms)</label>
+            <input type="number" id="pingodoceDelay" value="400" min="0" style="width:120px;">
+          </div>
+          <div class="form-group">
+            <label>Dry run</label>
+            <input type="checkbox" id="pingodoceDryRun">
+          </div>
+          <button class="btn btn-primary" onclick="startPingoDoceScrape()">Start Pingo Doce</button>
+          <button class="btn btn-danger" onclick="stopPingoDoceScrape()">Stop Pingo Doce</button>
+          <button class="btn btn-secondary" onclick="loadPingoDoceJobs()">Refresh</button>
+        </div>
+        <div id="pingodoceStatus" style="margin:0.5rem 0;color:#666;">Loading...</div>
+        <div class="table-scroll-wrapper">
+        <table class="products-table scrape-tab-table">
+          <thead><tr><th>Started</th><th>Status</th><th>Processed/Total</th><th>Matched</th><th>Unmatched</th><th>Inserted</th><th>Errors</th><th></th></tr></thead>
+          <tbody id="pingodoceJobsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🧱 Pingo Doce Category Blocklist</h2>
+        <p style="color:#666;margin-top:-0.25rem;">Block categories to ignore in future Pingo Doce scrapes. Blocking auto-purges existing Pingo Doce products in that row.</p>
+        <div class="form-row">
+          <button class="btn btn-secondary" onclick="loadPingoDoceCategoriesTab()">Refresh</button>
+          <button class="btn btn-secondary" onclick="toggleSelectAllPingoDoceCategories(true)">Select all visible</button>
+          <button class="btn btn-secondary" onclick="toggleSelectAllPingoDoceCategories(false)">Clear selection</button>
+          <button class="btn btn-danger" onclick="blockSelectedPingoDoceCategories()">Block Selected + Purge</button>
+        </div>
+        <table class="products-table scrape-tab-table" style="margin-top:1rem;">
+          <thead><tr><th>Select</th><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
+          <tbody id="pingodoceCategoriesTable"><tr><td colspan="7">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      </div><!-- End Pingo Doce sub-tab -->
+      
       <!-- Tools Sub-tab -->
       <div id="scrape-sub-tools" class="sub-tab-content">
       <div class="card">
@@ -369,6 +416,7 @@
             <select id="tempRetailerFilter" style="width:140px;">
               <option value="auchan">Auchan</option>
               <option value="lidl">Lidl</option>
+              <option value="pingodoce">Pingo Doce</option>
             </select>
           </div>
           <div class="form-group">
@@ -513,6 +561,9 @@ function showScrapeSubTab(tabId) {
   } else if (tabId === 'lidl') {
     loadLidlJobs();
     loadLidlCategoriesTab();
+  } else if (tabId === 'pingodoce') {
+    loadPingoDoceJobs();
+    loadPingoDoceCategoriesTab();
   }
   // Tools tab doesn't need lazy loading (Test URL is always ready)
 }
@@ -1256,6 +1307,187 @@ async function deleteLidlCategoryProducts(categoryEnc, subEnc) {
   }
 }
 
+// ============== PINGO DOCE SCRAPER FUNCTIONS ==============
+async function startPingoDoceScrape() {
+  const limit = parseInt(document.getElementById('pingodoceLimit').value || '500', 10);
+  const delayMs = parseInt(document.getElementById('pingodoceDelay').value || '400', 10);
+  const dryRun = !!document.getElementById('pingodoceDryRun').checked;
+  const res = await fetch(API+'/api/retailers/pingodoce/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ limit, delayMs, dryRun })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + data.error); return; }
+  document.getElementById('pingodoceStatus').textContent = 'Started job ' + data.jobId;
+  loadPingoDoceJobs();
+}
+
+async function stopPingoDoceScrape() {
+  await fetch(API+'/api/retailers/pingodoce/stop', { method:'POST' });
+
+  document.getElementById('pingodoceStatus').textContent = 'Stopping...';
+  setTimeout(loadPingoDoceJobs, 1000);
+}
+
+async function loadPingoDoceJobs() {
+  try {
+    const [statusRes, jobsRes] = await Promise.all([
+      fetch(API+'/api/retailers/pingodoce/status'),
+      fetch(API+'/api/retailers/pingodoce/jobs?limit=20')
+    ]);
+    const status = await statusRes.json();
+    const jobs = await jobsRes.json();
+
+    const statusEl = document.getElementById('pingodoceStatus');
+    if (status.running) {
+      const j = status.latestJob;
+      statusEl.textContent = `Running: ${j?.processed || 0}/${j?.totalUrls || '?'} processed, ${j?.matched || 0} matched`;
+      setTimeout(loadPingoDoceJobs, 3000);
+    } else {
+      const last = jobs[0];
+      statusEl.textContent = last ? `Last: ${last.status} (${last.processed}/${last.totalUrls})` : 'Idle';
+    }
+
+    const tbody = document.getElementById('pingodoceJobsTable');
+    if (!jobs.length) { tbody.innerHTML = '<tr><td colspan="8">No jobs yet</td></tr>'; return; }
+    tbody.innerHTML = jobs.map(j => `
+      <tr>
+        <td>${j.startedAt ? new Date(j.startedAt).toLocaleString() : '-'}</td>
+        <td><span class="status-badge ${j.status}">${j.status}</span></td>
+        <td class="numeric-cell">${j.processed}/${j.totalUrls}</td>
+        <td class="numeric-cell">${j.matched}</td>
+        <td class="numeric-cell">${j.unmatched}</td>
+        <td class="numeric-cell">${j.insertedPrices}</td>
+        <td class="numeric-cell">${j.errors}</td>
+        <td>${j.status === 'failed' || j.status === 'canceled' ? `<button class="btn btn-small" onclick="resumePingoDoceJob('${j.id}')">Resume</button>` : ''}</td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    document.getElementById('pingodoceStatus').textContent = 'Error: ' + e.message;
+  }
+}
+
+async function resumePingoDoceJob(jobId) {
+  const delayMs = parseInt(document.getElementById('pingodoceDelay').value || '400', 10);
+  const res = await fetch(API+`/api/retailers/pingodoce/resume/${jobId}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ delayMs })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + data.error); return; }
+  document.getElementById('pingodoceStatus').textContent = 'Resumed job ' + jobId;
+  loadPingoDoceJobs();
+}
+
+async function loadPingoDoceCategoriesTab() {
+  const tbody = document.getElementById('pingodoceCategoriesTable');
+  try {
+    const res = await fetch(API+'/api/retailers/pingodoce/categories');
+    const rows = await res.json();
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7">No categories found</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => {
+      const keyCategory = encodeURIComponent(r.category || '');
+      const keySub = encodeURIComponent(r.subcategory || '');
+      return `
+        <tr>
+          <td><input type="checkbox" class="pingodoce-block-select" data-category="${keyCategory}" data-subcategory="${keySub}"></td>
+          <td>${r.category || '-'}</td>
+          <td>${r.subcategory || '-'}</td>
+          <td class="numeric-cell">${r.productCount}</td>
+          <td>${r.lastSeenAt ? new Date(r.lastSeenAt).toLocaleDateString() : '-'}</td>
+          <td><span class="status-badge ${r.blocked ? 'failed' : 'completed'}">${r.blocked ? 'Blocked' : 'Active'}</span></td>
+          <td>
+            ${r.blocked 
+              ? `<button class="btn btn-small btn-secondary" onclick="unblockPingoDoceCategory('${keyCategory}','${keySub}')">Unblock</button>`
+              : `<button class="btn btn-small btn-danger" onclick="blockPingoDoceCategory('${keyCategory}','${keySub}')">Block</button>`
+            }
+            <button class="btn btn-small btn-secondary" onclick="deletePingoDoceCategoryProducts('${keyCategory}','${keySub}')">🗑</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch(e) { tbody.innerHTML = '<tr><td colspan="7">Error: '+e.message+'</td></tr>'; }
+}
+
+function toggleSelectAllPingoDoceCategories(checked) {
+  document.querySelectorAll('.pingodoce-block-select').forEach(el => { el.checked = !!checked; });
+}
+
+async function blockSelectedPingoDoceCategories() {
+  const selected = Array.from(document.querySelectorAll('.pingodoce-block-select:checked')).map(el => ({
+    category: decodeURIComponent(el.dataset.category || ''),
+    subcategory: el.dataset.subcategory ? decodeURIComponent(el.dataset.subcategory) : null
+  }));
+  if (!selected.length) { alert('Select at least one'); return; }
+  const res = await fetch(API+'/api/retailers/pingodoce/categories/block-bulk', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ items: selected, blocked: true })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + data.error); return; }
+  alert(`Blocked ${data.affected} categories, deleted ${data.deletedProducts} products`);
+  await loadPingoDoceCategoriesTab();
+}
+
+async function blockPingoDoceCategory(categoryEnc, subEnc) {
+  const category = decodeURIComponent(categoryEnc || '');
+  const subcategory = subEnc ? decodeURIComponent(subEnc) : null;
+  if (!confirm(`Block ${category}${subcategory ? ' > ' + subcategory : ''}?`)) return;
+
+  try {
+    const res = await fetch(API+'/api/retailers/pingodoce/categories/block', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, subcategory, blocked: true })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Block failed');
+    alert(`Blocked, deleted ${data.deletedProducts} products`);
+    await loadPingoDoceCategoriesTab();
+  } catch(e) { alert('Block error: '+e.message); }
+}
+
+async function unblockPingoDoceCategory(categoryEnc, subEnc) {
+  const category = decodeURIComponent(categoryEnc || '');
+  const subcategory = subEnc ? decodeURIComponent(subEnc) : null;
+
+  try {
+    const res = await fetch(API+'/api/retailers/pingodoce/categories/block', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, subcategory, blocked: false })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Unblock failed');
+    alert('Unblocked');
+    await loadPingoDoceCategoriesTab();
+  } catch(e) { alert('Unblock error: '+e.message); }
+}
+
+async function deletePingoDoceCategoryProducts(categoryEnc, subEnc) {
+  const category = decodeURIComponent(categoryEnc || '');
+  const subcategory = decodeURIComponent(subEnc || '');
+  if (!confirm(`Delete Pingo Doce products for ${category}${subcategory ? ' > ' + subcategory : ''}?`)) return;
+
+  try {
+    const res = await fetch(API+'/api/retailers/pingodoce/categories/delete-products', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, ...(subcategory ? { subcategory } : {}) })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Delete failed');
+    alert(`Deleted ${data.deletedProducts || 0} products`);
+    await loadStats();
+    await loadPingoDoceCategoriesTab();
+  } catch (e) {
+    alert('Delete error: ' + e.message);
+  }
+}
+
 async function checkStatus() {
   try {
     const res = await fetch(API+'/api/scraper/status');
@@ -1317,6 +1549,8 @@ setInterval(() => {
     loadAuchanJobs();
   } else if (currentScrapeSubTab === 'lidl') {
     loadLidlJobs();
+  } else if (currentScrapeSubTab === 'pingodoce') {
+    loadPingoDoceJobs();
   }
   checkVpnStatus();
 }, 4000);
