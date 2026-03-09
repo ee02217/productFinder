@@ -81,14 +81,17 @@ model RetailerScrapeJob {
 }
 
 model RetailerUnmatched {
-  id          String   @id @default(uuid())
-  retailer    String
-  url         String
-  ean         String?
-  name        String?
-  reason      String
-  jobId       String
-  createdAt   DateTime @default(now())
+  id              String   @id @default(uuid())
+  retailer        String
+  url             String
+  ean             String?
+  name            String?
+  reason          String
+  matchConfidence Float?   // Confidence score if fallback was attempted
+  matchTier       String?  // Tier used in matching attempt
+  matchReason     String?  // Detailed reason from matcher
+  jobId           String
+  createdAt       DateTime @default(now())
 
   job RetailerScrapeJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
@@ -111,23 +114,26 @@ model RetailerCategoryBlock {
 }
 
 model TempProduct {
-  id           String   @id @default(uuid())
-  retailer     String
-  sourceUrl    String   @unique
-  ean          String?
-  name         String?
-  brand        String?
-  category     String?
-  subcategory  String?
-  unitCount    Int?
-  unitType     String?
-  packCount    Int?
-  packUnitSize Float?
-  packUnitType String?
-  imageUrl     String?
-  status       String   @default("pending") // pending|approved|rejected|imported
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(uuid())
+  retailer        String
+  sourceUrl       String   @unique
+  ean             String?
+  name            String?
+  brand           String?
+  category        String?
+  subcategory     String?
+  unitCount       Int?
+  unitType        String?
+  packCount       Int?
+  packUnitSize    Float?
+  packUnitType    String?
+  imageUrl        String?
+  status          String   @default("pending") // pending|approved|rejected|imported
+  matchConfidence Float?   // Confidence score from fallback matching (0-1)
+  matchTier       String?  // Tier of match: tier1, tier2, ean
+  matchReason     String?  // Reason text: exact_match, similarity_review, etc.
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   prices      TempPrice[]
 

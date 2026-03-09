@@ -10,7 +10,7 @@ function samePrice(latest, incoming) {
   );
 }
 
-async function writeUnmatched(prisma, { jobId, url, ean, name, reason }) {
+async function writeUnmatched(prisma, { jobId, url, ean, name, reason, matchConfidence, matchTier, matchReason }) {
   await prisma.retailerUnmatched.create({
     data: {
       retailer: RETAILER,
@@ -19,6 +19,9 @@ async function writeUnmatched(prisma, { jobId, url, ean, name, reason }) {
       name: name || null,
       reason,
       jobId,
+      matchConfidence: Number.isFinite(matchConfidence) ? matchConfidence : null,
+      matchTier: matchTier || null,
+      matchReason: matchReason || null,
     },
   });
 }
@@ -32,7 +35,7 @@ function sameTempPrice(latest, parsed) {
   );
 }
 
-async function stageTempProductAndPrice(prisma, { parsed, reason }) {
+async function stageTempProductAndPrice(prisma, { parsed, reason, matchConfidence, matchTier }) {
   if (!parsed?.url) return null;
 
   const tempProduct = await prisma.tempProduct.upsert({
@@ -52,6 +55,9 @@ async function stageTempProductAndPrice(prisma, { parsed, reason }) {
       packUnitType: parsed.packUnitType || null,
       imageUrl: parsed.imageUrl || null,
       status: 'pending',
+      matchConfidence: Number.isFinite(matchConfidence) ? matchConfidence : null,
+      matchTier: matchTier || null,
+      matchReason: reason || null,
     },
     update: {
       ean: parsed.ean || null,
@@ -66,6 +72,9 @@ async function stageTempProductAndPrice(prisma, { parsed, reason }) {
       ...(parsed.packUnitType ? { packUnitType: parsed.packUnitType } : {}),
       ...(parsed.imageUrl ? { imageUrl: parsed.imageUrl } : {}),
       status: 'pending',
+      ...(Number.isFinite(matchConfidence) ? { matchConfidence } : {}),
+      ...(matchTier ? { matchTier } : {}),
+      ...(reason ? { matchReason: reason } : {}),
     },
   });
 

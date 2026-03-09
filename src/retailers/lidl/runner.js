@@ -4,7 +4,7 @@ const { RETAILER, DEFAULTS } = require('./constants');
 const { fetchText, delay } = require('./http');
 const { fetchAllProductUrls } = require('./sitemap');
 const { parseProduct } = require('./parser');
-const { findProductByEan } = require('./matcher');
+const { findProductByEan, findProduct } = require('./matcher');
 const { writeMatchedPrice, writeUnmatched, stageTempProductAndPrice, hasAllScrapingDetails, createProductFromParsed } = require('./writer');
 
 const prisma = new PrismaClient();
@@ -157,18 +157,8 @@ async function runWithJob(job, options) {
         continue;
       }
 
-      if (!parsed.ean) {
-        stats.unmatched++;
-        await writeUnmatched(prisma, {
-          jobId: job.id,
-          url,
-          ean: null,
-          name: parsed.name,
-          reason: 'missing_ean',
-        });
-        // Stage only if we have minimum identity (name)
-        if (!opts.dryRun && parsed.name) await stageTempProductAndPrice(prisma, { parsed, reason: 'missing_ean' });
-      } else if (!parsed.priceCents) {
+      // Handle missing price first (always unmatched regardless of matching)
+      if (!parsed.priceCents) {
         stats.unmatched++;
         await writeUnmatched(prisma, {
           jobId: job.id,
@@ -179,30 +169,95 @@ async function runWithJob(job, options) {
         });
         // Stage only if we have minimum identity (name)
         if (!opts.dryRun && parsed.name) await stageTempProductAndPrice(prisma, { parsed, reason: 'missing_price' });
-      } else {
-        let product = await findProductByEan(prisma, parsed.ean);
-
-        // If not matched by EAN, but we have full scraped data, create product directly
-        if (!product && hasAllScrapingDetails(parsed) && !opts.dryRun) {
-          product = await createProductFromParsed(prisma, parsed);
+        if (opts.delayMs > 0) await delay(opts.delayMs);
+        cursor = idx + 1;
+        if (cursor % 20 === 0 || cursor === totalUrls) {
+          await updateJob(job.id, { cursor, ...stats });
         }
+        continue;
+      }
 
-        if (!product) {
-          stats.unmatched++;
-          await writeUnmatched(prisma, {
-            jobId: job.id,
-            url,
-            ean: parsed.ean,
-            name: parsed.name,
-            reason: 'ean_not_found',
+      // Attempt to find product (EAN-first, then fallback matching)
+      let matchResult = null;
+      let product = null;
+      
+      if (parsed.ean) {
+        // Try EAN first
+        product = await findProductByEan(prisma, parsed.ean);
+        if (product) {
+          matchResult = {
+            product,
+            confidence: 1.0,
+            tier: 'ean',
+            reason: 'ean_match',
+          };
+        }
+      }
+      
+      // Fallback matching if no EAN or EAN not found
+      if (!product && parsed.name) {
+        const fallbackResult = await findProduct(prisma, {
+          ean: parsed.ean,
+          brand: parsed.brand,
+          name: parsed.name,
+          unitCount: parsed.unitCount,
+          unitType: parsed.unitType,
+        });
+        
+        if (fallbackResult) {
+          matchResult = fallbackResult;
+          product = fallbackResult.product;
+        }
+      }
+
+      // If not matched by any method, but we have full scraped data with EAN, create product directly
+      if (!product && parsed.ean && hasAllScrapingDetails(parsed) && !opts.dryRun) {
+        product = await createProductFromParsed(prisma, parsed);
+        if (product) {
+          matchResult = {
+            product,
+            confidence: 1.0,
+            tier: 'new_product',
+            reason: 'created_from_ean',
+          };
+        }
+      }
+
+      if (!product) {
+        stats.unmatched++;
+        // Build reason with matching signals if available
+        const unmatchedReason = parsed.ean 
+          ? (matchResult ? `ean_not_found_fallback:${matchResult.reason}` : 'ean_not_found')
+          : (matchResult ? `no_ean_fallback:${matchResult.reason}` : 'no_ean_no_match');
+        
+        await writeUnmatched(prisma, {
+          jobId: job.id,
+          url,
+          ean: parsed.ean,
+          name: parsed.name,
+          reason: unmatchedReason,
+          matchConfidence: matchResult?.confidence ?? null,
+          matchTier: matchResult?.tier ?? null,
+          matchReason: matchResult?.reason ?? null,
+        });
+        // Stage only if we have minimum identity (name)
+        if (!opts.dryRun && parsed.name) {
+          await stageTempProductAndPrice(prisma, { 
+            parsed, 
+            reason: unmatchedReason,
+            matchConfidence: matchResult?.confidence,
+            matchTier: matchResult?.tier,
           });
-          // Stage only if we have minimum identity (name)
-          if (!opts.dryRun && parsed.name) await stageTempProductAndPrice(prisma, { parsed, reason: 'ean_not_found' });
-        } else {
-          stats.matched++;
-          const result = await writeMatchedPrice(prisma, { product, parsed, dryRun: opts.dryRun });
-          if (result.inserted) stats.insertedPrices++;
-          if (result.unchanged) stats.unchanged++;
+        }
+      } else {
+        stats.matched++;
+        const result = await writeMatchedPrice(prisma, { product, parsed, dryRun: opts.dryRun });
+        if (result.inserted) stats.insertedPrices++;
+        if (result.unchanged) stats.unchanged++;
+        
+        // Log match details for debugging/monitoring
+        if (matchResult && matchResult.tier !== 'ean' && matchResult.tier !== 'new_product') {
+          console.log(`[LIDL] Fallback match: ${parsed.name} -> ${product.name} (conf=${matchResult.confidence?.toFixed(2)}, tier=${matchResult.tier}, reason=${matchResult.reason})`);
         }
       }
     } catch (err) {
