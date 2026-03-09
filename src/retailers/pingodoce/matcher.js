@@ -1,12 +1,16 @@
 /**
  * Pingo Doce Product Matcher
  * 
- * Since Pingo Doce doesn't expose EAN codes in HTML, we use strict fallback matching:
- * 1. No auto-creation of products from Pingo Doce-only data
- * 2. Match existing products via:
- *    a) Exact normalized brand+name+quantity/unit
- *    b) High similarity threshold for auto-match
- *    c) Medium confidence => unmatched/manual review
+ * Strict deterministic matching without EAN dependency:
+ * 1. TIER 1 (exact): exact normalized brand + exact normalized name + compatible quantity/unit
+ * 2. TIER 2 (high similarity): similarity >= 0.92 - auto-match
+ * 3. TIER 3 (medium): similarity >= 0.75 - UNMATCHED (manual review only, NO auto-link)
+ * 4. Below 0.75: no match
+ * 
+ * Key fixes:
+ * - REMOVED: skip candidates with EAN (should match any existing product)
+ * - ADDED: strict deterministic tier for exact brand+name+qty matches
+ * - CHANGED: medium confidence now returns unmatched (no auto-link)
  */
 
 const { RETAILER } = require('./constants');
@@ -14,8 +18,7 @@ const { RETAILER } = require('./constants');
 // Thresholds for matching (strict for Pingo Doce since no EAN)
 const SIMILARITY_THRESHOLDS = {
   HIGH: 0.92,    // Auto-match if similarity >= 0.92
-  MEDIUM: 0.75,  // Manual review if similarity >= 0.75
-  // Below 0.75 => no match
+  MEDIUM: 0.75,  // Manual review threshold - but DOES NOT auto-link
 };
 
 function normalizeForComparison(str) {
@@ -69,42 +72,85 @@ function levenshtein(a, b) {
   return matrix[b.length][a.length];
 }
 
-function exactMatchKey(parsed) {
-  // Create a key for exact matching: normalized brand+name+quantity+unit
-  const brand = normalizeForComparison(parsed.brand);
-  const name = normalizeForComparison(parsed.name);
-  const qty = parsed.unitCount || '';
-  const unit = parsed.unitType || '';
+/**
+ * Check if two quantity values are compatible (same unit type, within tolerance)
+ */
+function isQuantityCompatible(q1, q2) {
+  if (!q1 || !q2) return null;
+  if (q1.unitType !== q2.unitType) return false;
   
-  return `${brand}|${name}|${qty}|${unit}`;
+  // Allow 5% variance for quantity differences
+  const ratio = q1.unitCount / q2.unitCount;
+  return ratio >= 0.95 && ratio <= 1.05;
 }
 
-function findProductByExactMatch(prisma, parsed) {
+function exactMatchKey(parsed) {
+  // Create a key for exact matching: normalized brand+name
+  const brand = normalizeForComparison(parsed.brand);
+  const name = normalizeForComparison(parsed.name);
+  
+  return `${brand}|${name}`;
+}
+
+/**
+ * Find product by STRICT deterministic exact match:
+ * - exact normalized brand
+ * - exact normalized name
+ * - compatible quantity/unit (if both exist)
+ */
+async function findProductByExactMatch(prisma, parsed) {
   if (!parsed.name) return null;
   
-  const key = exactMatchKey(parsed);
+  const normBrand = normalizeForComparison(parsed.brand);
+  const normName = normalizeForComparison(parsed.name);
   
-  // Query products with similar normalized values
-  // This is a simplified approach - in production, you'd want full-text search
-  return prisma.product.findFirst({
+  if (!normName) return null;
+  
+  // Find products with matching normalized name
+  const candidates = await prisma.product.findMany({
     where: {
-      AND: [
-        { name: { not: null } },
-        parsed.brand ? { brand: { equals: parsed.brand, mode: 'insensitive' } } : {},
-      ],
+      name: { not: null },
     },
+    take: 500,
   });
+  
+  for (const candidate of candidates) {
+    const candBrand = normalizeForComparison(candidate.brand);
+    const candName = normalizeForComparison(candidate.name);
+    
+    // Check exact match on brand + name
+    if (candBrand !== normBrand || candName !== normName) {
+      continue;
+    }
+    
+    // If both have quantity info, check compatibility
+    if (parsed.unitCount && parsed.unitType && candidate.unitCount && candidate.unitType) {
+      const compatible = isQuantityCompatible(
+        { unitCount: parsed.unitCount, unitType: parsed.unitType },
+        { unitCount: candidate.unitCount, unitType: candidate.unitType }
+      );
+      if (compatible === false) {
+        continue; // Quantity mismatch - not an exact match
+      }
+      // If compatible (true) or both null, proceed
+    }
+    
+    // Found exact match
+    return candidate;
+  }
+  
+  return null;
 }
 
 async function findProductBySimilarity(prisma, parsed) {
   if (!parsed.name) return null;
   
-  // Get all products as candidates (this is expensive, consider pagination/caching)
+  // Get all products as candidates
   const candidates = await prisma.product.findMany({
     where: {
       name: { not: null },
     },
-    take: 500, // Limit candidates for performance
+    take: 500,
   });
   
   let bestMatch = null;
@@ -112,8 +158,8 @@ async function findProductBySimilarity(prisma, parsed) {
   let bestReason = null;
   
   for (const candidate of candidates) {
-    // Skip if candidate has EAN (prefer EAN-matched products from other retailers)
-    if (candidate.ean) continue;
+    // REMOVED: Skip if candidate has EAN
+    // Products with EAN from other retailers should still be matched
     
     const nameSimilarity = similarity(parsed.name, candidate.name);
     const brandSimilarity = parsed.brand && candidate.brand 
@@ -125,9 +171,17 @@ async function findProductBySimilarity(prisma, parsed) {
     
     // Check quantity match if both have quantity info
     let qtyScore = 0;
+    let qtyCompatible = null;
     if (parsed.unitCount && parsed.unitType && candidate.unitCount && candidate.unitType) {
-      if (parsed.unitType === candidate.unitType && parsed.unitCount === candidate.unitCount) {
+      const compatible = isQuantityCompatible(
+        { unitCount: parsed.unitCount, unitType: parsed.unitType },
+        { unitCount: candidate.unitCount, unitType: candidate.unitType }
+      );
+      if (compatible === true) {
         qtyScore = 1;
+        qtyCompatible = true;
+      } else if (compatible === false) {
+        qtyCompatible = false;
       }
     }
     
@@ -140,6 +194,7 @@ async function findProductBySimilarity(prisma, parsed) {
         nameSimilarity,
         brandSimilarity,
         qtyScore,
+        qtyCompatible,
         finalScore,
       };
     }
@@ -151,23 +206,24 @@ async function findProductBySimilarity(prisma, parsed) {
 async function findProduct(prisma, parsed) {
   // Pingo Doce strategy:
   // 1. No EAN available - skip EAN lookup
-  // 2. Try exact match on brand+name+quantity
-  // 3. If no exact match, try similarity matching with strict thresholds
+  // 2. TIER 1: Strict exact match on brand+name+quantity compatibility
+  // 3. TIER 2: High similarity (>= 0.92) - auto-match
+  // 4. TIER 3: Medium similarity (>= 0.75) - UNMATCHED, requires manual review
   
-  // Try exact match first
+  // TIER 1: Try strict exact match (brand + name + quantity compatibility)
   const exactCandidate = await findProductByExactMatch(prisma, parsed);
   if (exactCandidate) {
-    const exactKey = exactMatchKey(parsed);
+    const hasQtyInfo = parsed.unitCount && parsed.unitType;
     return {
       product: exactCandidate,
       confidence: 1.0,
-      tier: 'exact',
-      reason: 'exact_match_brand_name_qty',
-      matchKey: exactKey,
+      tier: 'tier1_exact',
+      reason: hasQtyInfo ? 'exact_brand_name_qty' : 'exact_brand_name',
+      matchKey: exactMatchKey(parsed),
     };
   }
   
-  // Try similarity matching
+  // TIER 2/3: Try similarity matching
   const similarityResult = await findProductBySimilarity(prisma, parsed);
   
   if (!similarityResult.product) {
@@ -181,28 +237,29 @@ async function findProduct(prisma, parsed) {
   
   const { product, score, reason } = similarityResult;
   
-  // Apply strict thresholds for Pingo Doce
+  // TIER 2: High similarity - auto-match
   if (score >= SIMILARITY_THRESHOLDS.HIGH) {
     return {
       product,
       confidence: score,
-      tier: 'tier1',
+      tier: 'tier2_high',
       reason: `similarity_high:${score.toFixed(2)}`,
       matchKey: `similarity:${score.toFixed(2)}`,
     };
   }
   
+  // TIER 3: Medium similarity - UNMATCHED (no auto-link)
+  // This requires manual review, does NOT auto-link
   if (score >= SIMILARITY_THRESHOLDS.MEDIUM) {
     return {
-      product,
+      product: null,  // CHANGED: return null instead of product
       confidence: score,
-      tier: 'tier2',
-      reason: `similarity_review:${score.toFixed(2)}`,
-      matchKey: `review:${score.toFixed(2)}`,
+      tier: 'tier3_review',  // Changed tier name to indicate review needed
+      reason: `similarity_review_requires_manual:${score.toFixed(2)}`,
     };
   }
   
-  // Below threshold - no match, will go to unmatched
+  // Below threshold - no match
   return {
     product: null,
     confidence: score,
@@ -216,4 +273,5 @@ module.exports = {
   similarity,
   normalizeForComparison,
   SIMILARITY_THRESHOLDS,
+  isQuantityCompatible,
 };

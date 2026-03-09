@@ -1,3 +1,13 @@
+/**
+ * Pingo Doce Product Parser
+ * 
+ * Improvements:
+ * - Better data-gtm-info parsing: find one with actual items (non-zero value)
+ * - Extract quantity from multiple sources: Peso Líquido, URL patterns, product name
+ * - Guard against bogus quantity parsing
+ * - Extract from JSON-LD for rich product data
+ */
+
 function toCents(raw) {
   if (raw == null) return null;
   const n = parseFloat(String(raw).replace(',', '.').replace(/[^\d.]/g, ''));
@@ -62,6 +72,20 @@ function normalizeQty(valueRaw, unitRaw) {
   if (!Number.isFinite(v) || v <= 0) return null;
   const u = String(unitRaw || '').toLowerCase();
 
+  // Guard: reject unrealistic quantities
+  if (u === 'g' || u === 'gr') {
+    if (v >= 50000) return null; // >= 50kg seems bogus
+  }
+  if (u === 'kg') {
+    if (v > 1000) return null; // > 1000kg seems bogus
+  }
+  if (u === 'ml') {
+    if (v > 100000) return null; // > 100L seems bogus
+  }
+  if (u === 'l') {
+    if (v > 10000) return null; // > 10000L seems bogus
+  }
+
   if (u === 'un') return { unitCount: Math.round(v), unitType: 'un' };
   if (u === 'ml') return { unitCount: Math.round(v), unitType: 'ml' };
   if (u === 'cl') return { unitCount: Math.round(v * 10), unitType: 'ml' };
@@ -88,29 +112,82 @@ function parsePesoLiquido(html) {
   return null;
 }
 
-function parseMultipack(text) {
+/**
+ * Parse quantity from product name or URL patterns
+ * e.g., "massa-500g", "sopa-de-espargos-986672.html"
+ */
+function parseQuantityFromUrlOrName(text) {
   if (!text) return null;
-  // 6x21.5g / 6 x 21,5 g / 12x1L / 4x33cl
-  const m = String(text).match(/(\d{1,3})\s*[x×]\s*([0-9]+(?:[\.,][0-9]+)?)\s*(kg|g|gr|ml|cl|l|un)\b/i);
-  if (!m) return null;
+  
+  // Pattern: name-XXXg, name-XXXkg, name-XXxml, name-Xl, name-XXxYYg (multipack)
+  // Also: product-id.html with numeric ID
+  
+  // Multipack: 6x21.5g / 6 x 21,5 g / 12x1L / 4x33cl
+  const multipackMatch = String(text).match(/(\d{1,3})\s*[x×]\s*([0-9]+(?:[\.,][0-9]+)?)\s*(kg|g|gr|ml|cl|l|un)\b/i);
+  if (multipackMatch) {
+    const packCount = parseInt(multipackMatch[1], 10);
+    const per = parseFloat(String(multipackMatch[2]).replace(',', '.'));
+    const unitRaw = multipackMatch[3].toLowerCase();
+    if (!Number.isFinite(packCount) || !Number.isFinite(per) || packCount <= 0 || per <= 0) return null;
 
-  const packCount = parseInt(m[1], 10);
-  const per = parseFloat(String(m[2]).replace(',', '.'));
-  const unitRaw = m[3].toLowerCase();
-  if (!Number.isFinite(packCount) || !Number.isFinite(per) || packCount <= 0 || per <= 0) return null;
+    const normalizedPer = normalizeQty(per, unitRaw);
+    if (!normalizedPer) return null;
 
-  const normalizedPer = normalizeQty(per, unitRaw);
-  if (!normalizedPer) return null;
+    // Calculate total: packCount * per (not rounded per * packCount)
+    const totalCount = Math.round(packCount * per);
 
-  return {
-    packCount,
-    packUnitSize: per,
-    packUnitType: normalizedPer.unitType,
-    total: {
-      unitCount: Math.round(packCount * normalizedPer.unitCount),
-      unitType: normalizedPer.unitType,
-    },
-  };
+    return {
+      packCount,
+      packUnitSize: per,
+      packUnitType: normalizedPer.unitType,
+      total: {
+        unitCount: totalCount,
+        unitType: normalizedPer.unitType,
+      },
+    };
+  }
+  
+  // Single quantity: 500g, 1.5kg, 750ml, 2l
+  const singleMatch = String(text).match(/([0-9]+(?:[\.,][0-9]+)?)\s*(kg|g|gr|ml|cl|l|un)\b/i);
+  if (singleMatch) {
+    const qty = normalizeQty(singleMatch[1], singleMatch[2]);
+    if (qty) {
+      return { total: qty };
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Parse quantity from page text (looks for patterns like "0.065 Kg" or "250 g")
+ * Only used as fallback when no other quantity source available
+ */
+function parseQuantityFromPageText(html) {
+  if (!html) return null;
+  
+  // Look for patterns like "0.065 Kg", "250 g", "1.5 l" anywhere in the page
+  // Be specific to avoid false positives
+  const patterns = [
+    // Decimal quantities: 0.065 Kg, 1.5 l (prefer these as they're usually real weights)
+    /([0-9]+[\.,][0-9]+)\s*(kg|g|ml|cl|l)\b/i,
+    // Integer quantities: 250 g, 500 ml (only smaller values to avoid false positives)
+    /\b([1-9][0-9]{1,2})\s*(g|ml|cl|l)\b/i,  // 10-999 range only
+  ];
+  
+  for (const pattern of patterns) {
+    const m = html.match(pattern);
+    if (m) {
+      const qty = normalizeQty(m[1], m[2]);
+      if (qty) return qty;
+    }
+  }
+  
+  return null;
+}
+
+function parseMultipack(text) {
+  return parseQuantityFromUrlOrName(text);
 }
 
 function parseJsonLdProduct(html) {
@@ -131,15 +208,36 @@ function parseJsonLdProduct(html) {
   return null;
 }
 
+/**
+ * Parse data-gtm-info, finding the one with actual product data (non-zero value + items)
+ */
 function parseGtmData(html) {
-  // Extract product data from data-gtm-info attribute
-  // Find the one that contains item_id (the actual product data, not cart/minicart)
+  // Find ALL data-gtm-info attributes
   const matches = html.matchAll(/data-gtm-info="([^"]+)"/g);
+  
   for (const match of matches) {
     try {
       const decoded = match[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
       const parsed = JSON.parse(decoded);
-      // Only return if it has items (product data)
+      
+      // Look for the one with actual product data (has items with non-zero price)
+      if (parsed && parsed.items && parsed.items.length > 0) {
+        const item = parsed.items[0];
+        // Check if it has valid product data (item_id, non-zero value)
+        if (item.item_id && parsed.value > 0) {
+          return parsed;
+        }
+      }
+    } catch (_) {
+      continue;
+    }
+  }
+  
+  // Fallback: try again with any data that has items
+  for (const match of matches) {
+    try {
+      const decoded = match[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+      const parsed = JSON.parse(decoded);
       if (parsed && parsed.items && parsed.items.length > 0) {
         return parsed;
       }
@@ -147,6 +245,7 @@ function parseGtmData(html) {
       continue;
     }
   }
+  
   return null;
 }
 
@@ -221,8 +320,10 @@ function stripTrailingQuantity(name) {
 }
 
 function extractInternalId(url) {
-  // Extract product ID from URL: product-name-1234.html
-  const match = url.match(/[-\/](\d{3,6})\.html$/i);
+  // Extract product ID from URL: product-name-1234.html or product-name-id.html
+  // Prefer the numeric ID at the end before .html
+  const match = url.match(/[-\/](\d{6,})\.html$/i) ||  // 6+ digit IDs (canonical)
+                url.match(/[-\/](\d{3,6})\.html$/i);   // 3-6 digit IDs (promo variants)
   return match ? match[1] : null;
 }
 
@@ -230,13 +331,13 @@ function parseProduct(html, url) {
   const jsonLd = parseJsonLdProduct(html);
   const gtmData = parseGtmData(html);
 
-  // Pingo Doce typically doesn't expose EAN in HTML - we rely on internal ID
-  // No EAN extraction available for Pingo Doce
+  // Extract internal product ID from URL
   const internalId = extractInternalId(url);
 
-  // Product name from JSON-LD or HTML title
+  // Product name from JSON-LD, data-gtm-info, or HTML
   const rawName =
     (jsonLd && jsonLd.name) ||
+    (gtmData && gtmData.items && gtmData.items[0]?.item_name) ||
     html.match(/<title>([^<]+)\s*\|/i)?.[1] ||
     html.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1] ||
     null;
@@ -253,18 +354,23 @@ function parseProduct(html, url) {
     html.match(/property="og:image"\s+content="([^"]+)"/i)?.[1] ||
     null;
 
-  // Price from data-gtm-info value field
+  // Price from data-gtm-info value field (prefer the one with actual product data)
   let currentPrice = null;
-  if (gtmData && gtmData.value != null) {
+  if (gtmData && gtmData.value != null && gtmData.value > 0) {
     currentPrice = String(gtmData.value);
   }
-  // Fallback to span.value content
+  // Fallback: look for price in page
   if (!currentPrice) {
-    currentPrice = html.match(/<span[^>]*class="value"[^>]*content="([\d.]+)"[^>]*>/i)?.[1] || null;
+    // Look for price in standard location
+    const priceMatch = html.match(/<span[^>]*class="[^"]*price[^"]*"[^>]*content="([\d.]+)"[^>]*>/i) ||
+                       html.match(/<span[^>]*class="value"[^>]*content="([\d.]+)"[^>]*>/i);
+    if (priceMatch) {
+      currentPrice = priceMatch[1];
+    }
   }
 
   // Old price - look for "was" or "original" price patterns
-  const oldPrice = null; // Pingo Doce doesn't typically show old prices in the same way
+  const oldPrice = null;
 
   // Unit price - parse from page if available
   const { pricePerKgCents, priceUnit } = parsePerUnit(html);
@@ -272,12 +378,28 @@ function parseProduct(html, url) {
   const decodedRawName = rawName ? decodeHtmlEntities(String(rawName)) : null;
   const decodedRawBrand = rawBrand ? decodeHtmlEntities(String(rawBrand)) : null;
 
-  // quantity precedence: Peso Líquido > multipack from raw name/url
+  // Quantity extraction - multiple sources with priority:
+  // 1. Peso Líquido (most reliable - explicit weight label)
+  // 2. URL or product name patterns (explicit in URL)
+  // 3. Page text patterns like "0.065 Kg" (fallback - can have false positives)
+  // 
+  // Guard: For page text, only accept if reasonable for the product type
+  
   const pesoLiquido = parsePesoLiquido(html);
+  const urlQty = parseQuantityFromUrlOrName(decodedRawName || url);
   const multipack = parseMultipack(decodedRawName || url);
-
-  const unitCount = pesoLiquido?.unitCount ?? multipack?.total?.unitCount ?? null;
-  const unitType = pesoLiquido?.unitType ?? multipack?.total?.unitType ?? null;
+  
+  // Page text is fallback only - has false positives (e.g., "5kG" from "500k" or similar)
+  // Only use if we don't have other sources
+  let pageTextQty = null;
+  if (!pesoLiquido && !urlQty && !multipack) {
+    pageTextQty = parseQuantityFromPageText(html);
+  }
+  
+  const qty = pesoLiquido || urlQty?.total || multipack?.total || pageTextQty;
+  
+  const unitCount = qty?.unitCount ?? null;
+  const unitType = qty?.unitType ?? null;
 
   const cleanName = decodedRawName ? toTitleCase(stripTrailingQuantity(decodedRawName)) : null;
   const cleanBrand = decodedRawBrand ? toTitleCase(decodedRawBrand) : null;
@@ -288,14 +410,17 @@ function parseProduct(html, url) {
   const category = crumbs.length >= 2 ? crumbs[1] : (crumbs[0] || urlCategories.category);
   const subcategory = crumbs.length >= 1 ? crumbs[crumbs.length - 1] : (urlCategories.subcategory);
 
+  // Use category from gtmData if available
+  const gtmCategory = gtmData?.items?.[0]?.item_category;
+
   return {
     url,
-    internalId, // Pingo Doce internal product ID (e.g., 1805)
+    internalId,
     ean: null, // Pingo Doce doesn't expose EAN in HTML
     name: cleanName,
     brand: cleanBrand,
     imageUrl: imageUrl || null,
-    category: category || null,
+    category: gtmCategory || category || null,
     subcategory: subcategory || null,
     priceCents: toCents(currentPrice),
     pvpCents: toCents(oldPrice),
@@ -303,9 +428,9 @@ function parseProduct(html, url) {
     priceUnit,
     unitCount,
     unitType,
-    packCount: multipack?.packCount ?? null,
-    packUnitSize: multipack?.packUnitSize ?? null,
-    packUnitType: multipack?.packUnitType ?? null,
+    packCount: multipack?.packCount ?? urlQty?.packCount ?? null,
+    packUnitSize: multipack?.packUnitSize ?? urlQty?.packUnitSize ?? null,
+    packUnitType: multipack?.packUnitType ?? urlQty?.packUnitType ?? null,
   };
 }
 
@@ -314,6 +439,9 @@ module.exports = {
   parsePerUnit,
   parsePesoLiquido,
   parseMultipack,
+  parseQuantityFromUrlOrName,
+  parseQuantityFromPageText,
   parseProduct,
   extractInternalId,
+  normalizeQty, // Export for testing guards
 };
