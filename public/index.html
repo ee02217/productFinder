@@ -177,10 +177,15 @@
       <div class="card">
         <h2>🧱 Auchan Category Blocklist</h2>
         <p style="color:#666;margin-top:-0.25rem;">Block categories to ignore in future Auchan scrapes. Blocking auto-purges existing Auchan products in that row.</p>
-        <button class="btn btn-secondary" onclick="loadAuchanCategoriesTab()">Refresh</button>
+        <div class="form-row">
+          <button class="btn btn-secondary" onclick="loadAuchanCategoriesTab()">Refresh</button>
+          <button class="btn btn-secondary" onclick="toggleSelectAllAuchanCategories(true)">Select all visible</button>
+          <button class="btn btn-secondary" onclick="toggleSelectAllAuchanCategories(false)">Clear selection</button>
+          <button class="btn btn-danger" onclick="blockSelectedAuchanCategories()">Block Selected + Purge</button>
+        </div>
         <table class="products-table" style="margin-top:1rem;">
-          <thead><tr><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
-          <tbody id="auchanCategoriesTable"><tr><td colspan="6">Loading...</td></tr></tbody>
+          <thead><tr><th>Select</th><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
+          <tbody id="auchanCategoriesTable"><tr><td colspan="7">Loading...</td></tr></tbody>
         </table>
       </div>
 
@@ -797,7 +802,7 @@ async function loadAuchanJobs() {
 async function loadAuchanCategoriesTab() {
   const tbody = document.getElementById('auchanCategoriesTable');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
   try {
     const res = await fetch(API+'/api/retailers/auchan/categories');
     const rows = await res.json();
@@ -808,6 +813,7 @@ async function loadAuchanCategoriesTab() {
       const keySub = encodeURIComponent(r.subcategory || '');
       const checked = r.blocked ? 'checked' : '';
       return `<tr>
+        <td><input type="checkbox" class="auchan-block-select" data-category="${keyCategory}" data-subcategory="${keySub}"></td>
         <td>${r.category || '-'}</td>
         <td>${r.subcategory || '-'}</td>
         <td>${r.productCount || 0}</td>
@@ -815,9 +821,42 @@ async function loadAuchanCategoriesTab() {
         <td><input type="checkbox" ${checked} onchange="toggleAuchanBlock('${keyCategory}','${keySub}', this.checked)"></td>
         <td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteAuchanCategoryProducts('${keyCategory}','${keySub}')">Delete products</button></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="6">No Auchan categories found yet</td></tr>';
+    }).join('') || '<tr><td colspan="7">No Auchan categories found yet</td></tr>';
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="6">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7">Error: ${e.message}</td></tr>`;
+  }
+}
+
+function toggleSelectAllAuchanCategories(checked) {
+  document.querySelectorAll('.auchan-block-select').forEach(el => { el.checked = !!checked; });
+}
+
+async function blockSelectedAuchanCategories() {
+  const selected = Array.from(document.querySelectorAll('.auchan-block-select:checked')).map(el => ({
+    category: decodeURIComponent(el.dataset.category || ''),
+    subcategory: decodeURIComponent(el.dataset.subcategory || '') || null,
+  })).filter(x => x.category);
+
+  if (!selected.length) {
+    alert('Select at least one category row.');
+    return;
+  }
+
+  if (!confirm(`Block and purge ${selected.length} selected categories?`)) return;
+
+  try {
+    const res = await fetch(API+'/api/retailers/auchan/categories/block-bulk', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ items: selected, blocked: true })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Bulk block failed');
+    alert(`Blocked ${data.affected || 0}. Purged ${data.deletedProducts || 0} products (${data.deletedTempProducts || 0} temp).`);
+    await loadAuchanCategoriesTab();
+    await loadStats();
+  } catch (e) {
+    alert('Bulk block error: ' + e.message);
   }
 }
 
