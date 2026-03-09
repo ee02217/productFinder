@@ -51,20 +51,50 @@ function decodeHtmlEntities(str) {
 }
 
 function parsePerUnit(html) {
-  // Pingo Doce uses data-gtm-info with price/kg if available
-  // Also look for "price per" patterns in the page
-  const m = html.match(/pricePer[^>]*>[\s\S]*?([\d.,]+)\s*&euro;\s*\/\s*([A-Za-z]+)/i);
-  if (!m) return { pricePerKgCents: null, priceUnit: null };
+  if (!html) return { pricePerKgCents: null, priceUnit: null };
 
-  const cents = toCents(m[1]);
-  const unitRaw = (m[2] || '').toLowerCase();
+  // Pattern 1: data-gtm-info with price/kg if available
+  // e.g., data-gtm-info="..."pricePer...">39,83 €/L"
+  const m1 = html.match(/pricePer[^>]*>[\s\S]*?([\d.,]+)\s*€\s*\/\s*([A-Za-z]+)/i);
+  if (m1) {
+    const cents = toCents(m1[1]);
+    const unitRaw = (m1[2] || '').toLowerCase();
+    let priceUnit = null;
+    if (unitRaw === 'kg') priceUnit = 'kg';
+    else if (unitRaw === 'l' || unitRaw === 'lt') priceUnit = 'l';
+    else if (unitRaw === 'un') priceUnit = 'un';
+    if (cents != null) return { pricePerKgCents: cents, priceUnit };
+  }
 
-  let priceUnit = null;
-  if (unitRaw === 'kg') priceUnit = 'kg';
-  else if (unitRaw === 'l' || unitRaw === 'lt') priceUnit = 'l';
-  else if (unitRaw === 'un') priceUnit = 'un';
+  // Pattern 2: Volume/weight + price per unit
+  // e.g., "0.06 L | 39,83 €/L" or "250 g | 1,16 €/Kg"
+  // Also handles: "0.06L | 39,83€/L", "250g | 1,16€/Kg", "1 L | 2,50 €/L"
+  const m2 = html.match(/([\d.,]+)\s*(L|l|KG|Kg|kg|G|g|ML|ml|UN|Un|un)\s*\|\s*([\d.,]+)\s*€\s*\/\s*(L|l|KG|Kg|kg|G|g|ML|ml|Un|un)/i);
+  if (m2) {
+    // m2[3] is the price, m2[4] is the unit
+    const cents = toCents(m2[3]);
+    const unitRaw = (m2[4] || '').toLowerCase();
+    let priceUnit = null;
+    if (unitRaw === 'kg') priceUnit = 'kg';
+    else if (unitRaw === 'l' || unitRaw === 'lt') priceUnit = 'l';
+    else if (unitRaw === 'un' || unitRaw === 'ml') priceUnit = 'un';
+    if (cents != null) return { pricePerKgCents: cents, priceUnit };
+  }
 
-  return { pricePerKgCents: cents, priceUnit };
+  // Pattern 3: Standalone price per unit (pricePer, €/Kg, €/L patterns)
+  // e.g., "39,83 €/L", "1,16 €/Kg", "0.85 €/un"
+  const m3 = html.match(/([\d.,]+)\s*€\s*\/\s*(kg|l|lt|un|ml)/i);
+  if (m3) {
+    const cents = toCents(m3[1]);
+    const unitRaw = (m3[2] || '').toLowerCase();
+    let priceUnit = null;
+    if (unitRaw === 'kg') priceUnit = 'kg';
+    else if (unitRaw === 'l' || unitRaw === 'lt') priceUnit = 'l';
+    else if (unitRaw === 'un' || unitRaw === 'ml') priceUnit = 'un';
+    if (cents != null) return { pricePerKgCents: cents, priceUnit };
+  }
+
+  return { pricePerKgCents: null, priceUnit: null };
 }
 
 function normalizeQty(valueRaw, unitRaw) {

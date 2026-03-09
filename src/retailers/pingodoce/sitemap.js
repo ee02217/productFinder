@@ -89,6 +89,21 @@ function extractProductKey(url) {
   }
 }
 
+/**
+ * Pre-filter: Hard-skip URLs containing '/promocoes/' in pathname
+ * This is a safety filter applied BEFORE deduplication
+ */
+function filterPromocoesUrls(urls) {
+  return urls.filter((url) => {
+    try {
+      const u = new URL(url);
+      return !u.pathname.includes('/promocoes/');
+    } catch {
+      return true; // Keep if URL parsing fails
+    }
+  });
+}
+
 async function fetchAllProductUrls() {
   const sitemapUrls = await fetchProductSitemapUrls();
   const all = [];
@@ -98,8 +113,11 @@ async function fetchAllProductUrls() {
     all.push(...urls);
   }
 
-  // Deduplicate, preferring /home/produtos/ over /promocoes/
-  return deduplicateUrls([...new Set(all)]);
+  // Hard-skip /promocoes/ URLs before any processing
+  const filtered = filterPromocoesUrls(all);
+
+  // Deduplicate remaining URLs, preferring /home/produtos/ over other paths
+  return deduplicateUrls([...new Set(filtered)]);
 }
 
 module.exports = {
@@ -109,4 +127,5 @@ module.exports = {
   fetchAllProductUrls,
   deduplicateUrls,
   extractProductKey,
+  filterPromocoesUrls,
 };
