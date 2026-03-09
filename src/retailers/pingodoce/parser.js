@@ -133,16 +133,21 @@ function parseJsonLdProduct(html) {
 
 function parseGtmData(html) {
   // Extract product data from data-gtm-info attribute
-  // Example: {"currency":"EUR","value":0.29,"items":[{"item_id":"1805","item_name":"Sal Fino",...}]}
-  const match = html.match(/data-gtm-info="([^"]+)"/);
-  if (!match) return null;
-
-  try {
-    const decoded = match[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-    return JSON.parse(decoded);
-  } catch (_) {
-    return null;
+  // Find the one that contains item_id (the actual product data, not cart/minicart)
+  const matches = html.matchAll(/data-gtm-info="([^"]+)"/g);
+  for (const match of matches) {
+    try {
+      const decoded = match[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+      const parsed = JSON.parse(decoded);
+      // Only return if it has items (product data)
+      if (parsed && parsed.items && parsed.items.length > 0) {
+        return parsed;
+      }
+    } catch (_) {
+      continue;
+    }
   }
+  return null;
 }
 
 function parseBreadcrumbs(html) {
