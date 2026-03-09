@@ -204,14 +204,43 @@ async function findProductBySimilarity(prisma, parsed) {
 }
 
 async function findProduct(prisma, parsed) {
+  // Defensive wrapper: catch any errors and return safe unmatched result
+  try {
+    return await findProductSafe(prisma, parsed);
+  } catch (err) {
+    // Return safe result instead of throwing - runner will handle gracefully
+    return {
+      product: null,
+      confidence: 0,
+      tier: null,
+      reason: `matcher_error:${err.message.slice(0, 80)}`,
+    };
+  }
+}
+
+async function findProductSafe(prisma, parsed) {
   // Pingo Doce strategy:
   // 1. No EAN available - skip EAN lookup
   // 2. TIER 1: Strict exact match on brand+name+quantity compatibility
   // 3. TIER 2: High similarity (>= 0.92) - auto-match
   // 4. TIER 3: Medium similarity (>= 0.75) - UNMATCHED, requires manual review
   
+  // Build safe query: use contains with normalized name hints, cap at 100 candidates
+  const normName = parsed.name ? normalizeForComparison(parsed.name) : '';
+  
+  // Safe query construction - never use empty objects in AND arrays
+  const queryWhere = { name: { not: null } };
+  if (normName && normName.length >= 3) {
+    queryWhere.name = { contains: normName, mode: 'insensitive' };
+  }
+  
+  const candidates = await prisma.product.findMany({
+    where: queryWhere,
+    take: 100, // Cap candidates to avoid memory issues
+  });
+  
   // TIER 1: Try strict exact match (brand + name + quantity compatibility)
-  const exactCandidate = await findProductByExactMatch(prisma, parsed);
+  const exactCandidate = findExactMatchFromCandidates(candidates, parsed);
   if (exactCandidate) {
     const hasQtyInfo = parsed.unitCount && parsed.unitType;
     return {
@@ -224,7 +253,7 @@ async function findProduct(prisma, parsed) {
   }
   
   // TIER 2/3: Try similarity matching
-  const similarityResult = await findProductBySimilarity(prisma, parsed);
+  const similarityResult = findBestSimilarityMatch(candidates, parsed);
   
   if (!similarityResult.product) {
     return {
@@ -235,7 +264,7 @@ async function findProduct(prisma, parsed) {
     };
   }
   
-  const { product, score, reason } = similarityResult;
+  const { product, score } = similarityResult;
   
   // TIER 2: High similarity - auto-match
   if (score >= SIMILARITY_THRESHOLDS.HIGH) {
@@ -266,6 +295,97 @@ async function findProduct(prisma, parsed) {
     tier: null,
     reason: `below_threshold:${score.toFixed(2)}`,
   };
+}
+
+/**
+ * Find exact match from pre-fetched candidates (avoid DB call per product)
+ */
+function findExactMatchFromCandidates(candidates, parsed) {
+  if (!parsed.name) return null;
+  
+  const normBrand = normalizeForComparison(parsed.brand);
+  const normName = normalizeForComparison(parsed.name);
+  
+  if (!normName) return null;
+  
+  for (const candidate of candidates) {
+    const candBrand = normalizeForComparison(candidate.brand);
+    const candName = normalizeForComparison(candidate.name);
+    
+    // Check exact match on brand + name
+    if (candBrand !== normBrand || candName !== normName) {
+      continue;
+    }
+    
+    // If both have quantity info, check compatibility
+    if (parsed.unitCount && parsed.unitType && candidate.unitCount && candidate.unitType) {
+      const compatible = isQuantityCompatible(
+        { unitCount: parsed.unitCount, unitType: parsed.unitType },
+        { unitCount: candidate.unitCount, unitType: candidate.unitType }
+      );
+      if (compatible === false) {
+        continue; // Quantity mismatch - not an exact match
+      }
+    }
+    
+    // Found exact match
+    return candidate;
+  }
+  
+  return null;
+}
+
+/**
+ * Find best similarity match from pre-fetched candidates
+ */
+function findBestSimilarityMatch(candidates, parsed) {
+  if (!parsed.name) return { product: null, score: 0 };
+  
+  let bestMatch = null;
+  let bestScore = 0;
+  let bestReason = null;
+  
+  for (const candidate of candidates) {
+    const nameSimilarity = similarity(parsed.name, candidate.name);
+    const brandSimilarity = parsed.brand && candidate.brand 
+      ? similarity(parsed.brand, candidate.brand) 
+      : (parsed.brand === candidate.brand ? 1 : 0);
+    
+    // Combined score with weighting
+    const combinedScore = (nameSimilarity * 0.7) + (brandSimilarity * 0.3);
+    
+    // Check quantity match if both have quantity info
+    let qtyScore = 0;
+    let qtyCompatible = null;
+    if (parsed.unitCount && parsed.unitType && candidate.unitCount && candidate.unitType) {
+      const compatible = isQuantityCompatible(
+        { unitCount: parsed.unitCount, unitType: parsed.unitType },
+        { unitCount: candidate.unitCount, unitType: candidate.unitType }
+      );
+      if (compatible === true) {
+        qtyScore = 1;
+        qtyCompatible = true;
+      } else if (compatible === false) {
+        qtyCompatible = false;
+      }
+    }
+    
+    const finalScore = (combinedScore * 0.7) + (qtyScore * 0.3);
+    
+    if (finalScore > bestScore) {
+      bestScore = finalScore;
+      bestMatch = candidate;
+      bestReason = {
+        nameSimilarity,
+        brandSimilarity,
+        qtyScore,
+        qtyCompatible,
+        finalScore,
+      };
+    }
+  }
+  
+  return { product: bestMatch, score: bestScore, reason: bestReason };
 }
 
 module.exports = {

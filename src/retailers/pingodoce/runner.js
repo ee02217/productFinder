@@ -232,18 +232,37 @@ async function runWithJob(job, options) {
         }
       }
     } catch (err) {
-      stats.errors++;
-      await writeUnmatched(prisma, {
-        jobId: job.id,
-        url,
-        ean: null,
-        name: null,
-        reason: `fetch_or_parse_error:${err.message.slice(0, 120)}`,
-        internalId: null,
-        matchConfidence: null,
-        matchTier: null,
-        matchReason: `error:${err.message.slice(0, 100)}`,
-      });
+      // Check if this is a matcher error (already handled gracefully, but tracking)
+      const isMatcherError = err.message && err.message.includes && err.message.includes('prisma.');
+      if (isMatcherError) {
+        // Matcher threw unexpectedly - count as unmatched with detailed reason
+        stats.unmatched++;
+        await writeUnmatched(prisma, {
+          jobId: job.id,
+          url,
+          ean: null,
+          name: parsed?.name || null,
+          reason: `matcher_error:${err.message.slice(0, 120)}`,
+          internalId: parsed?.internalId || null,
+          matchConfidence: null,
+          matchTier: null,
+          matchReason: `matcher_error:${err.message.slice(0, 100)}`,
+        });
+      } else {
+        // Fetch or parse error - count as fatal error
+        stats.errors++;
+        await writeUnmatched(prisma, {
+          jobId: job.id,
+          url,
+          ean: null,
+          name: null,
+          reason: `fetch_or_parse_error:${err.message.slice(0, 120)}`,
+          internalId: null,
+          matchConfidence: null,
+          matchTier: null,
+          matchReason: `error:${err.message.slice(0, 100)}`,
+        });
+      }
     }
 
     cursor = idx + 1;
