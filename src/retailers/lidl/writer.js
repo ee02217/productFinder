@@ -158,6 +158,10 @@ function hasAllScrapingDetails(parsed) {
 }
 
 async function createProductFromParsed(prisma, parsed) {
+  if (!parsed?.ean) {
+    throw new Error('Cannot create product without EAN: product creation requires a valid EAN code');
+  }
+
   return prisma.product.create({
     data: {
       ean: parsed.ean,
