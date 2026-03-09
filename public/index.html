@@ -68,6 +68,24 @@
     .category-tree .level-1 { font-weight: 600; }
     .category-tree .level-2 { color: #666; }
     .category-tree .level-3 { color: #999; font-size: 0.85rem; }
+    
+    /* Sub-tabs for Scrape page */
+    .sub-tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; border-bottom: 1px solid #e0e0e0; padding-bottom: 0; }
+    .sub-tab { 
+      padding: 0.5rem 1rem; 
+      border: none; 
+      background: none; 
+      cursor: pointer; 
+      font-size: 0.9rem; 
+      color: #666; 
+      border-bottom: 2px solid transparent; 
+      margin-bottom: -1px;
+      transition: all 0.2s;
+    }
+    .sub-tab:hover { color: #333; background: #f5f5f5; }
+    .sub-tab.active { color: #4CAF50; border-bottom-color: #4CAF50; font-weight: 500; background: #fafafa; }
+    .sub-tab-content { display: none; }
+    .sub-tab-content.active { display: block; }
   </style>
 </head>
 <body>
@@ -122,6 +140,16 @@
     
     <!-- Scrape Tab -->
     <div id="tab-scrape" class="tab-content">
+      <!-- Sub-tab navigation -->
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-scrape-tab="continente" onclick="showScrapeSubTab('continente')">🛒 Continente</button>
+        <button class="sub-tab" data-scrape-tab="auchan" onclick="showScrapeSubTab('auchan')">🛒 Auchan</button>
+        <button class="sub-tab" data-scrape-tab="lidl" onclick="showScrapeSubTab('lidl')">🛒 Lidl</button>
+        <button class="sub-tab" data-scrape-tab="tools" onclick="showScrapeSubTab('tools')">🔧 Tools</button>
+      </div>
+      
+      <!-- Continente Sub-tab -->
+      <div id="scrape-sub-continente" class="sub-tab-content active">
       <div class="card">
         <h2>🚀 Scrape Products</h2>
         <div class="form-row">
@@ -147,7 +175,10 @@
           </table>
         </div>
       </div>
+      </div><!-- End Continente sub-tab -->
       
+      <!-- Auchan Sub-tab -->
+      <div id="scrape-sub-auchan" class="sub-tab-content">
       <div class="card">
         <h2>🛒 Auchan Retailer Jobs</h2>
         <div class="form-row">
@@ -188,7 +219,10 @@
           <tbody id="auchanCategoriesTable"><tr><td colspan="7">Loading...</td></tr></tbody>
         </table>
       </div>
-
+      </div><!-- End Auchan sub-tab -->
+      
+      <!-- Lidl Sub-tab -->
+      <div id="scrape-sub-lidl" class="sub-tab-content">
       <div class="card">
         <h2>🛒 Lidl Retailer Jobs</h2>
         <div class="form-row">
@@ -229,7 +263,10 @@
           <tbody id="lidlCategoriesTable"><tr><td colspan="7">Loading...</td></tr></tbody>
         </table>
       </div>
-
+      </div><!-- End Lidl sub-tab -->
+      
+      <!-- Tools Sub-tab -->
+      <div id="scrape-sub-tools" class="sub-tab-content">
       <div class="card">
         <h2>🔍 Test URL</h2>
         <div class="form-row">
@@ -238,6 +275,7 @@
         </div>
         <pre id="testResult" style="background:#f8f9fa;padding:1rem;overflow:auto;max-height:300px;"></pre>
       </div>
+      </div><!-- End Tools sub-tab -->
     </div>
     
     <!-- Categories Tab -->
@@ -344,7 +382,10 @@ function showTab(tabId) {
   document.getElementById('tab-' + tabId).classList.add('active');
   
   if (tabId === 'products') loadProducts(1);
-  if (tabId === 'scrape') loadScrapeOptions();
+  if (tabId === 'scrape') {
+    // Initialize sub-tabs (restores last selected or defaults to Continente)
+    initScrapeSubTabs();
+  }
   if (tabId === 'categories') loadCategories();
   if (tabId === 'unmatched') loadTempProducts();
   if (tabId === 'settings') loadSettings();
@@ -387,6 +428,48 @@ async function loadScrapeOptions() {
       `<label style="display:block;padding:4px 0;"><input type="checkbox" value="${o.value}"> ${o.label}</label>`
     ).join('');
   } catch(e) { console.error(e); }
+}
+
+// Sub-tab switching for Scrape page
+let currentScrapeSubTab = localStorage.getItem('scrapeSubTab') || 'continente';
+
+function showScrapeSubTab(tabId) {
+  // Update active tab button
+  document.querySelectorAll('.sub-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.scrapeTab === tabId);
+  });
+  
+  // Show/hide sub-tab content panels
+  document.querySelectorAll('#tab-scrape .sub-tab-content').forEach(panel => {
+    panel.classList.remove('active');
+  });
+  const activePanel = document.getElementById('scrape-sub-' + tabId);
+  if (activePanel) {
+    activePanel.classList.add('active');
+  }
+  
+  // Save selection
+  localStorage.setItem('scrapeSubTab', tabId);
+  currentScrapeSubTab = tabId;
+  
+  // Lazy-load data when sub-tab is opened
+  if (tabId === 'continente') {
+    loadScrapeOptions();
+    loadScrapeQueue();
+  } else if (tabId === 'auchan') {
+    loadAuchanJobs();
+    loadAuchanCategoriesTab();
+  } else if (tabId === 'lidl') {
+    loadLidlJobs();
+    loadLidlCategoriesTab();
+  }
+  // Tools tab doesn't need lazy loading (Test URL is always ready)
+}
+
+function initScrapeSubTabs() {
+  // Restore last selected sub-tab or default to Continente
+  const savedTab = localStorage.getItem('scrapeSubTab') || 'continente';
+  showScrapeSubTab(savedTab);
 }
 
 async function seedCategories() {
@@ -1167,8 +1250,27 @@ async function loadCategoryFilter() {
   } catch(e) { console.error(e); }
 }
 
-loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter(); loadScrapeQueue(); loadAuchanJobs(); loadAuchanCategoriesTab(); loadLidlJobs(); loadLidlCategoriesTab(); loadTempProducts();
-setInterval(()=>{if(scraperStatus&&scraperStatus.isScraping){checkStatus();loadStats();loadScrapeQueue();}loadAuchanJobs();loadLidlJobs();checkVpnStatus();},4000);
+loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter(); loadTempProducts();
+// Initial loads for scrape tabs (lazy-loaded on first view)
+initScrapeSubTabs(); 
+
+// Periodic refresh - scoped to active scrape sub-tab to reduce overhead
+setInterval(() => {
+  if (scraperStatus && scraperStatus.isScraping) {
+    checkStatus();
+    loadStats();
+    loadScrapeQueue();
+  }
+  // Only refresh data for active sub-tab
+  if (currentScrapeSubTab === 'continente') {
+    loadScrapeQueue();
+  } else if (currentScrapeSubTab === 'auchan') {
+    loadAuchanJobs();
+  } else if (currentScrapeSubTab === 'lidl') {
+    loadLidlJobs();
+  }
+  checkVpnStatus();
+}, 4000);
 document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter')loadProducts(1)});
 </script>
 </body>
