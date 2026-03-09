@@ -86,6 +86,51 @@
     .sub-tab.active { color: #4CAF50; border-bottom-color: #4CAF50; font-weight: 500; background: #fafafa; }
     .sub-tab-content { display: none; }
     .sub-tab-content.active { display: block; }
+    
+    /* Compact table styles for Scrape tab */
+    .scrape-tab-table {
+      font-size: 0.85rem;
+    }
+    .scrape-tab-table th,
+    .scrape-tab-table td {
+      padding: 0.4rem 0.5rem;
+    }
+    .scrape-tab-table th {
+      position: sticky;
+      top: 0;
+      background: #f8f9fa;
+      z-index: 10;
+    }
+    .scrape-tab-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .scrape-tab-table tbody tr:hover {
+      background: #f0f7ff;
+    }
+    /* Status badges/pills */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: capitalize;
+    }
+    .status-badge.pending { background: #fff3cd; color: #856404; }
+    .status-badge.running { background: #cce5ff; color: #004085; }
+    .status-badge.completed { background: #d4edda; color: #155724; }
+    .status-badge.failed { background: #f8d7da; color: #721c24; }
+    .status-badge.canceled { background: #e2e3e5; color: #383d41; }
+    /* Numeric columns right-aligned */
+    .numeric-cell {
+      text-align: right;
+      font-family: monospace;
+    }
+    /* Mobile horizontal scroll wrapper */
+    .table-scroll-wrapper {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
   </style>
 </head>
 <body>
@@ -169,10 +214,12 @@
         </div>
         <div id="scrapeResults" style="margin-top:1rem;">
           <h3>Scrape Queue</h3>
-          <table class="products-table">
+          <div class="table-scroll-wrapper">
+          <table class="products-table scrape-tab-table">
             <thead><tr><th>Category</th><th>Limit</th><th>Status</th><th>Scraped</th><th>Errors</th><th></th></tr></thead>
             <tbody id="scrapeResultsBody"><tr><td colspan="6">Select categories and click Start</td></tr></tbody>
           </table>
+          </div>
         </div>
       </div>
       </div><!-- End Continente sub-tab -->
@@ -199,10 +246,12 @@
           <button class="btn btn-secondary" onclick="loadAuchanJobs()">Refresh</button>
         </div>
         <div id="auchanStatus" style="margin:0.5rem 0;color:#666;">Loading...</div>
-        <table class="products-table">
+        <div class="table-scroll-wrapper">
+        <table class="products-table scrape-tab-table">
           <thead><tr><th>Started</th><th>Status</th><th>Processed/Total</th><th>Matched</th><th>Unmatched</th><th>Inserted</th><th>Errors</th><th></th></tr></thead>
           <tbody id="auchanJobsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
         </table>
+        </div>
       </div>
 
       <div class="card">
@@ -214,7 +263,7 @@
           <button class="btn btn-secondary" onclick="toggleSelectAllAuchanCategories(false)">Clear selection</button>
           <button class="btn btn-danger" onclick="blockSelectedAuchanCategories()">Block Selected + Purge</button>
         </div>
-        <table class="products-table" style="margin-top:1rem;">
+        <table class="products-table scrape-tab-table" style="margin-top:1rem;">
           <thead><tr><th>Select</th><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
           <tbody id="auchanCategoriesTable"><tr><td colspan="7">Loading...</td></tr></tbody>
         </table>
@@ -243,10 +292,12 @@
           <button class="btn btn-secondary" onclick="loadLidlJobs()">Refresh</button>
         </div>
         <div id="lidlStatus" style="margin:0.5rem 0;color:#666;">Loading...</div>
-        <table class="products-table">
+        <div class="table-scroll-wrapper">
+        <table class="products-table scrape-tab-table">
           <thead><tr><th>Started</th><th>Status</th><th>Processed/Total</th><th>Matched</th><th>Unmatched</th><th>Inserted</th><th>Errors</th><th></th></tr></thead>
           <tbody id="lidlJobsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
         </table>
+        </div>
       </div>
 
       <div class="card">
@@ -258,7 +309,7 @@
           <button class="btn btn-secondary" onclick="toggleSelectAllLidlCategories(false)">Clear selection</button>
           <button class="btn btn-danger" onclick="blockSelectedLidlCategories()">Block Selected + Purge</button>
         </div>
-        <table class="products-table" style="margin-top:1rem;">
+        <table class="products-table scrape-tab-table" style="margin-top:1rem;">
           <thead><tr><th>Select</th><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
           <tbody id="lidlCategoriesTable"><tr><td colspan="7">Loading...</td></tr></tbody>
         </table>
@@ -817,7 +868,6 @@ async function loadScrapeQueue() {
     const res = await fetch(API+'/api/scraper/queue');
     if (!res.ok) throw new Error('Failed to load queue');
     const jobs = await res.json();
-    const statusIcon = { pending: '⏳', running: '🔄', completed: '✅', failed: '❌', canceled: '⏹️' };
     const tbody = document.getElementById('scrapeResultsBody');
     if (!tbody) return;
     // Show all jobs (newest first)
@@ -825,7 +875,7 @@ async function loadScrapeQueue() {
     tbody.innerHTML = sortedJobs.map(j => {
       const canResume = ['running','failed','pending','canceled'].includes(j.status);
       const action = canResume ? `<button class="btn btn-secondary" style="padding:4px 8px" onclick="resumeJob('${j.id}')">Resume</button>` : '';
-      return `<tr><td>${j.label || j.category}</td><td>${j.limit ?? 0}</td><td>${statusIcon[j.status] || j.status} ${j.status}</td><td>${j.scraped}</td><td>${j.errors}</td><td>${action}</td></tr>`;
+      return `<tr><td>${j.label || j.category}</td><td class="numeric-cell">${j.limit ?? 0}</td><td><span class="status-badge ${j.status}">${j.status}</span></td><td class="numeric-cell">${j.scraped}</td><td class="numeric-cell">${j.errors}</td><td>${action}</td></tr>`;
     }).join('') || '<tr><td colspan="6">No scrape history - select categories and click Start</td></tr>';
   } catch(e) { 
     console.error(e); 
@@ -912,11 +962,10 @@ async function loadAuchanJobs() {
 
     const tbody = document.getElementById('auchanJobsTable');
     if (!tbody) return;
-    const icon = { pending:'⏳', running:'🔄', completed:'✅', failed:'❌', canceled:'⏹️' };
     tbody.innerHTML = (jobs || []).map(j => {
       const canResume = ['failed','canceled','pending'].includes(j.status);
       const action = canResume ? `<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem" onclick="resumeAuchanJob('${j.id}')">Resume</button>` : '';
-      return `<tr><td>${new Date(j.startedAt).toLocaleString()}</td><td>${icon[j.status]||''} ${j.status}</td><td>${j.processed}/${j.totalUrls}</td><td>${j.matched}</td><td>${j.unmatched}</td><td>${j.insertedPrices}</td><td>${j.errors}</td><td>${action}</td></tr>`;
+      return `<tr><td>${new Date(j.startedAt).toLocaleString()}</td><td><span class="status-badge ${j.status}">${j.status}</span></td><td class="numeric-cell">${j.processed}/${j.totalUrls}</td><td class="numeric-cell">${j.matched}</td><td class="numeric-cell">${j.unmatched}</td><td class="numeric-cell">${j.insertedPrices}</td><td class="numeric-cell">${j.errors}</td><td>${action}</td></tr>`;
     }).join('') || '<tr><td colspan="8">No Auchan jobs yet</td></tr>';
   } catch (e) {
     const tbody = document.getElementById('auchanJobsTable');
@@ -1073,12 +1122,12 @@ async function loadLidlJobs() {
     tbody.innerHTML = jobs.map(j => `
       <tr>
         <td>${j.startedAt ? new Date(j.startedAt).toLocaleString() : '-'}</td>
-        <td><span class="badge badge-${j.status === 'completed' ? 'success' : j.status === 'failed' ? 'danger' : j.status === 'running' ? 'primary' : 'secondary'}">${j.status}</span></td>
-        <td>${j.processed}/${j.totalUrls}</td>
-        <td>${j.matched}</td>
-        <td>${j.unmatched}</td>
-        <td>${j.insertedPrices}</td>
-        <td>${j.errors}</td>
+        <td><span class="status-badge ${j.status}">${j.status}</span></td>
+        <td class="numeric-cell">${j.processed}/${j.totalUrls}</td>
+        <td class="numeric-cell">${j.matched}</td>
+        <td class="numeric-cell">${j.unmatched}</td>
+        <td class="numeric-cell">${j.insertedPrices}</td>
+        <td class="numeric-cell">${j.errors}</td>
         <td>${j.status === 'failed' || j.status === 'canceled' ? `<button class="btn btn-small" onclick="resumeLidlJob('${j.id}')">Resume</button>` : ''}</td>
       </tr>
     `).join('');
@@ -1114,9 +1163,9 @@ async function loadLidlCategoriesTab() {
           <td><input type="checkbox" class="lidl-block-select" data-category="${keyCategory}" data-subcategory="${keySub}"></td>
           <td>${r.category || '-'}</td>
           <td>${r.subcategory || '-'}</td>
-          <td>${r.productCount}</td>
+          <td class="numeric-cell">${r.productCount}</td>
           <td>${r.lastSeenAt ? new Date(r.lastSeenAt).toLocaleDateString() : '-'}</td>
-          <td><span class="badge badge-${r.blocked ? 'danger' : 'success'}">${r.blocked ? 'Yes' : 'No'}</span></td>
+          <td><span class="status-badge ${r.blocked ? 'failed' : 'completed'}">${r.blocked ? 'Blocked' : 'Active'}</span></td>
           <td>
             ${r.blocked 
               ? `<button class="btn btn-small btn-secondary" onclick="unblockLidlCategory('${keyCategory}','${keySub}')">Unblock</button>`
