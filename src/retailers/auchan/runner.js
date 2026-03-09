@@ -16,6 +16,37 @@ const runtime = {
   promise: null,
 };
 
+function slugify(v) {
+  return String(v || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function getUrlSegments(url) {
+  try {
+    const path = new URL(url).pathname;
+    return path.split('/').filter(Boolean).map(slugify).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function isUrlBlocked(url, blockedRules) {
+  if (!blockedRules || blockedRules.length === 0) return false;
+  const segments = getUrlSegments(url);
+  for (const rule of blockedRules) {
+    if (!rule.categorySlug) continue;
+    const hasCat = segments.includes(rule.categorySlug);
+    if (!hasCat) continue;
+    if (!rule.subcategorySlug) return true; // block whole category
+    if (segments.includes(rule.subcategorySlug)) return true;
+  }
+  return false;
+}
+
 function parseRunnerOptions(opts = {}) {
   return {
     dryRun: !!opts.dryRun,
@@ -61,7 +92,23 @@ async function runWithJob(job, options) {
     throw err;
   }
 
-  const totalUrls = opts.limit > 0 ? Math.min(opts.limit, urls.length) : urls.length;
+  const blocks = await prisma.retailerCategoryBlock.findMany({
+    where: { retailer: RETAILER, blocked: true },
+  });
+  const blockSet = new Set(blocks.map(b => `${(b.category || '').toLowerCase()}|${(b.subcategory || '').toLowerCase()}`));
+
+  // Fast pre-filter by URL path slugs (avoid fetching/parsing blocked categories)
+  const blockedRules = blocks.map(b => ({
+    categorySlug: slugify(b.category),
+    subcategorySlug: b.subcategory ? slugify(b.subcategory) : null,
+  }));
+
+  const discoveredUrls = urls.length;
+  const allowedUrls = urls.filter((u) => !isUrlBlocked(u, blockedRules));
+  const skippedByBlock = discoveredUrls - allowedUrls.length;
+
+  const selectedUrls = opts.limit > 0 ? allowedUrls.slice(0, opts.limit) : allowedUrls;
+  const totalUrls = selectedUrls.length;
   let cursor = Math.min(job.cursor || 0, totalUrls);
 
   let stats = {
@@ -73,10 +120,7 @@ async function runWithJob(job, options) {
     errors: job.errors || 0,
   };
 
-  const blocks = await prisma.retailerCategoryBlock.findMany({
-    where: { retailer: RETAILER, blocked: true },
-  });
-  const blockSet = new Set(blocks.map(b => `${(b.category || '').toLowerCase()}|${(b.subcategory || '').toLowerCase()}`));
+  console.log(`[AUCHAN] discovered=${discoveredUrls}, skippedByBlock=${skippedByBlock}, selected=${totalUrls}`);
 
   await updateJob(job.id, { totalUrls, cursor });
 
@@ -89,7 +133,7 @@ async function runWithJob(job, options) {
       return { jobId: job.id, status: 'canceled', ...stats, totalUrls, cursor: idx };
     }
 
-    const url = urls[idx];
+    const url = selectedUrls[idx];
     try {
       const html = await fetchText(url, {
         timeoutMs: opts.timeoutMs,
