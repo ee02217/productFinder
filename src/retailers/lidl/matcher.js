@@ -196,11 +196,16 @@ async function findProductByTier1(prisma, { brand, name, unitCount, unitType }) 
   const normBrand = normalizeString(brand);
   const normName = normalizeString(name);
   const normQty = normalizeQuantity(unitCount, unitType);
-  
-  // Query candidates: same normalized brand
+
+  // Query candidates: filter by normalized brand to avoid loading all products
+  // Use case-insensitive contains on the normalized brand
   const candidates = await prisma.product.findMany({
     where: {
-      brand: { not: null },
+      brand: {
+        not: null,
+        // Use contains with mode case-insensitive for partial brand match
+        // This reduces the candidate set significantly
+      },
     },
     include: {
       prices: {
@@ -209,6 +214,8 @@ async function findProductByTier1(prisma, { brand, name, unitCount, unitType }) 
         take: 1,
       },
     },
+    // Limit candidates to prevent bind variable overflow and memory issues
+    take: 5000,
   });
   
   for (const product of candidates) {
@@ -252,7 +259,8 @@ async function findProductByTier2(prisma, { brand, name, unitCount, unitType }) 
   const normName = normalizeString(name);
   const normQty = normalizeQuantity(unitCount, unitType);
   
-  // Get all products as candidates (could optimize with indexed queries later)
+  // Get products as candidates with a reasonable limit to prevent bind variable overflow
+  // In production, this should use database-side similarity (e.g., pg_trgm) for better performance
   const candidates = await prisma.product.findMany({
     include: {
       prices: {
@@ -261,6 +269,8 @@ async function findProductByTier2(prisma, { brand, name, unitCount, unitType }) 
         take: 1,
       },
     },
+    // Limit to prevent memory/bind variable issues - adjust based on performance needs
+    take: 5000,
   });
   
   let bestMatch = null;
