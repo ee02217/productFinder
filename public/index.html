@@ -175,6 +175,16 @@
       </div>
 
       <div class="card">
+        <h2>🧱 Auchan Category Blocklist</h2>
+        <p style="color:#666;margin-top:-0.25rem;">Block categories to ignore in future Auchan scrapes. Blocking auto-purges existing Auchan products in that row.</p>
+        <button class="btn btn-secondary" onclick="loadAuchanCategoriesTab()">Refresh</button>
+        <table class="products-table" style="margin-top:1rem;">
+          <thead><tr><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
+          <tbody id="auchanCategoriesTable"><tr><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="card">
         <h2>🔍 Test URL</h2>
         <div class="form-row">
           <input type="text" id="testUrl" placeholder="https://www.continente.pt/..." style="flex:1;padding:0.5rem;">
@@ -243,19 +253,6 @@
       </div>
     </div>
 
-    <!-- Auchan Categories Tab -->
-    <div id="tab-auchan-categories" class="tab-content">
-      <div class="card">
-        <h2>🛒 Auchan Categories from Existing Products</h2>
-        <p style="color:#666;margin-top:-0.25rem;">Block categories to ignore in future scrapes. Blocking also purges current Auchan products in that category.</p>
-        <button class="btn btn-secondary" onclick="loadAuchanCategoriesTab()">Refresh</button>
-        <table class="products-table" style="margin-top:1rem;">
-          <thead><tr><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
-          <tbody id="auchanCategoriesTable"><tr><td colspan="6">Loading...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-
     <!-- Settings Tab -->
     <div id="tab-settings" class="tab-content">
       <div class="card">
@@ -303,7 +300,6 @@ function showTab(tabId) {
   if (tabId === 'scrape') loadScrapeOptions();
   if (tabId === 'categories') loadCategories();
   if (tabId === 'unmatched') loadTempProducts();
-  if (tabId === 'auchan-categories') loadAuchanCategoriesTab();
   if (tabId === 'settings') loadSettings();
 }
 
@@ -836,7 +832,11 @@ async function toggleAuchanBlock(categoryEnc, subEnc, blocked) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to update block');
+    if (blocked) {
+      alert(`Blocked and purged ${data.deletedProducts || 0} products (${data.deletedTempProducts || 0} temp)`);
+    }
     await loadAuchanCategoriesTab();
+    await loadStats();
   } catch (e) {
     alert('Block update error: ' + e.message);
   }

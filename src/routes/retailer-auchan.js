@@ -133,11 +133,37 @@ router.post('/categories/block', async (req, res) => {
       },
     });
 
+    let deletedProducts = 0;
+    let deletedTempProducts = 0;
+
+    // Auto-purge when blocked
+    if (blocked) {
+      const deleted = await prisma.product.deleteMany({
+        where: {
+          source: 'auchan',
+          category,
+          ...(typeof subcategory === 'string' ? { subcategory } : {}),
+        },
+      });
+      deletedProducts = deleted.count;
+
+      const deletedTemp = await prisma.tempProduct.deleteMany({
+        where: {
+          retailer: 'auchan',
+          category,
+          ...(typeof subcategory === 'string' ? { subcategory } : {}),
+        },
+      });
+      deletedTempProducts = deletedTemp.count;
+    }
+
     res.json({
       status: 'ok',
       blocked: !!blocked,
       category,
       subcategory,
+      deletedProducts,
+      deletedTempProducts,
       block: saved,
     });
   } catch (err) {
