@@ -73,6 +73,11 @@ async function runWithJob(job, options) {
     errors: job.errors || 0,
   };
 
+  const blocks = await prisma.retailerCategoryBlock.findMany({
+    where: { retailer: RETAILER, blocked: true },
+  });
+  const blockSet = new Set(blocks.map(b => `${(b.category || '').toLowerCase()}|${(b.subcategory || '').toLowerCase()}`));
+
   await updateJob(job.id, { totalUrls, cursor });
 
   for (let idx = cursor; idx < totalUrls; idx++) {
@@ -94,6 +99,19 @@ async function runWithJob(job, options) {
       const parsed = parseProduct(html, url);
 
       stats.processed++;
+
+      // Skip blocked categories/subcategories
+      const catKey = `${(parsed.category || '').toLowerCase()}|${(parsed.subcategory || '').toLowerCase()}`;
+      const catOnlyKey = `${(parsed.category || '').toLowerCase()}|`;
+      if (blockSet.has(catKey) || blockSet.has(catOnlyKey)) {
+        stats.unchanged++;
+        if (opts.delayMs > 0) await delay(opts.delayMs);
+        cursor = idx + 1;
+        if (cursor % 20 === 0 || cursor === totalUrls) {
+          await updateJob(job.id, { cursor, ...stats });
+        }
+        continue;
+      }
 
       if (!parsed.ean) {
         stats.unmatched++;

@@ -243,6 +243,19 @@
       </div>
     </div>
 
+    <!-- Auchan Categories Tab -->
+    <div id="tab-auchan-categories" class="tab-content">
+      <div class="card">
+        <h2>🛒 Auchan Categories from Existing Products</h2>
+        <p style="color:#666;margin-top:-0.25rem;">Block categories to ignore in future scrapes. Blocking also purges current Auchan products in that category.</p>
+        <button class="btn btn-secondary" onclick="loadAuchanCategoriesTab()">Refresh</button>
+        <table class="products-table" style="margin-top:1rem;">
+          <thead><tr><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
+          <tbody id="auchanCategoriesTable"><tr><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Settings Tab -->
     <div id="tab-settings" class="tab-content">
       <div class="card">
@@ -290,6 +303,7 @@ function showTab(tabId) {
   if (tabId === 'scrape') loadScrapeOptions();
   if (tabId === 'categories') loadCategories();
   if (tabId === 'unmatched') loadTempProducts();
+  if (tabId === 'auchan-categories') loadAuchanCategoriesTab();
   if (tabId === 'settings') loadSettings();
 }
 
@@ -784,6 +798,71 @@ async function loadAuchanJobs() {
   }
 }
 
+async function loadAuchanCategoriesTab() {
+  const tbody = document.getElementById('auchanCategoriesTable');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+  try {
+    const res = await fetch(API+'/api/retailers/auchan/categories');
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || 'Failed to load categories');
+
+    tbody.innerHTML = rows.map(r => {
+      const keyCategory = encodeURIComponent(r.category || '');
+      const keySub = encodeURIComponent(r.subcategory || '');
+      const checked = r.blocked ? 'checked' : '';
+      return `<tr>
+        <td>${r.category || '-'}</td>
+        <td>${r.subcategory || '-'}</td>
+        <td>${r.productCount || 0}</td>
+        <td>${r.lastSeenAt ? new Date(r.lastSeenAt).toLocaleString() : '-'}</td>
+        <td><input type="checkbox" ${checked} onchange="toggleAuchanBlock('${keyCategory}','${keySub}', this.checked)"></td>
+        <td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteAuchanCategoryProducts('${keyCategory}','${keySub}')">Delete products</button></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6">No Auchan categories found yet</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function toggleAuchanBlock(categoryEnc, subEnc, blocked) {
+  try {
+    const category = decodeURIComponent(categoryEnc || '');
+    const subcategory = decodeURIComponent(subEnc || '');
+    const res = await fetch(API+'/api/retailers/auchan/categories/block', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, subcategory: subcategory || null, blocked })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to update block');
+    await loadAuchanCategoriesTab();
+  } catch (e) {
+    alert('Block update error: ' + e.message);
+  }
+}
+
+async function deleteAuchanCategoryProducts(categoryEnc, subEnc) {
+  const category = decodeURIComponent(categoryEnc || '');
+  const subcategory = decodeURIComponent(subEnc || '');
+  if (!confirm(`Delete Auchan products for ${category}${subcategory ? ' > ' + subcategory : ''}?`)) return;
+
+  try {
+    const res = await fetch(API+'/api/retailers/auchan/categories/delete-products', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, ...(subcategory ? { subcategory } : {}) })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Delete failed');
+    alert(`Deleted ${data.deletedProducts || 0} products`);
+    await loadStats();
+    await loadAuchanCategoriesTab();
+  } catch (e) {
+    alert('Delete error: ' + e.message);
+  }
+}
+
 async function checkStatus() {
   try {
     const res = await fetch(API+'/api/scraper/status');
@@ -827,7 +906,7 @@ async function loadCategoryFilter() {
   } catch(e) { console.error(e); }
 }
 
-loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter(); loadScrapeQueue(); loadAuchanJobs(); loadTempProducts();
+loadSettings(); loadStats(); loadProducts(); checkStatus(); checkVpnStatus(); loadCategoryFilter(); loadScrapeQueue(); loadAuchanJobs(); loadTempProducts(); loadAuchanCategoriesTab();
 setInterval(()=>{if(scraperStatus&&scraperStatus.isScraping){checkStatus();loadStats();loadScrapeQueue();}loadAuchanJobs();checkVpnStatus();},4000);
 document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter')loadProducts(1)});
 </script>

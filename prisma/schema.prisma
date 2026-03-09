@@ -97,6 +97,19 @@ model RetailerUnmatched {
   @@index([ean])
 }
 
+model RetailerCategoryBlock {
+  id          String   @id @default(uuid())
+  retailer    String
+  category    String
+  subcategory String?
+  blocked     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([retailer, category, subcategory])
+  @@index([retailer, blocked])
+}
+
 model TempProduct {
   id           String   @id @default(uuid())
   retailer     String
