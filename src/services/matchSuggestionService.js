@@ -25,6 +25,10 @@ const CONFIG = {
   BRAND_MISMATCH_PENALTY: 0.5,
   // Minimum brand similarity to consider (below = skip)
   MIN_BRAND_SIMILARITY: 0.6,
+  // Minimum name length for safe filtered query (same as pingodoce matcher)
+  MIN_NAME_LENGTH_FOR_FILTER: 3,
+  // Max candidates to retrieve (reduced from 500 since we're filtering)
+  MAX_CANDIDATES: 100,
 };
 
 /**
@@ -215,9 +219,20 @@ async function generateSingleSuggestion(retailer, unmatchedRow) {
   const sourceUnitCount = enrichedRow.sourceUnitCount || null;
   const sourceUnitType = enrichedRow.sourceUnitType || null;
   
-  // Get all products as candidates (limit to avoid memory issues)
+  // Use safe name-filtered query similar to pingodoce matcher
+  // This ensures relevant candidates outside arbitrary top rows can be found
+  const normName = normalizeForComparison(sourceName);
+  
+  // Build query - use contains with normalized name when length >= 3
+  // Otherwise fall back to broader query (handles short product names)
+  const queryWhere = { name: { not: null } };
+  if (normName && normName.length >= CONFIG.MIN_NAME_LENGTH_FOR_FILTER) {
+    queryWhere.name = { contains: normName, mode: 'insensitive' };
+  }
+  
   const candidates = await prisma.product.findMany({
-    take: 500,
+    where: queryWhere,
+    take: CONFIG.MAX_CANDIDATES,
   });
   
   let bestMatch = null;

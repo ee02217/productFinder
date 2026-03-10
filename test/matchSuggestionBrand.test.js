@@ -232,6 +232,35 @@ test('brand guard: different brands should be detected', () => {
   assertLessThan(brandSim, 0.5);
 });
 
+console.log('\n=== Testing Name Filtered Query ===\n');
+
+test('name filter: normalized name is used for filtering', () => {
+  const sourceName = 'Noodles De Galinha';
+  const normName = normalizeForComparison(sourceName);
+  assertEqual(normName, 'noodles de galinha');
+  assertTrue(normName.length >= 3);
+});
+
+test('name filter: short names fall back to broader query', () => {
+  const shortName = 'AB';
+  const normName = normalizeForComparison(shortName);
+  assertLessThan(normName.length, 3);
+});
+
+test('name filter: diacritics are normalized before filtering', () => {
+  const nameWithAccent = 'Noodles De Galinha Açúcar';
+  const normName = normalizeForComparison(nameWithAccent);
+  // Should remove diacritics
+  assertEqual(normName.indexOf('ç'), -1);
+  assertTrue(normName.includes('acucar'));
+});
+
+test('name filter: special characters are removed', () => {
+  const nameWithSpecial = 'Noodles® De Galinha!';
+  const normName = normalizeForComparison(nameWithSpecial);
+  assertEqual(normName, 'noodles de galinha');
+});
+
 function assertNotEqual(actual, expected, msg = '') {
   if (actual === expected) {
     throw new Error(`${msg}\n    Expected: NOT ${expected}\n    Actual:   ${actual}`);
