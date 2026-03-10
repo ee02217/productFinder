@@ -199,7 +199,7 @@ async function generateSuggestions(retailer, options = {}) {
  * Get suggestions by retailer and status
  */
 async function getSuggestions(retailer, status = 'pending', options = {}) {
-  const { limit = 100, includeProduct = true } = options;
+  const { limit = 100, includeProduct = true, includePrices = false } = options;
   
   const where = {
     retailer,
@@ -209,8 +209,16 @@ async function getSuggestions(retailer, status = 'pending', options = {}) {
   const suggestions = await prisma.matchSuggestion.findMany({
     where,
     include: {
-      suggestedProduct: includeProduct,
-      approvedProduct: includeProduct,
+      suggestedProduct: includeProduct ? {
+        include: {
+          prices: includePrices ? { orderBy: { capturedAt: 'desc' }, take: 1 } : false,
+        },
+      } : false,
+      approvedProduct: includeProduct ? {
+        include: {
+          prices: includePrices ? { orderBy: { capturedAt: 'desc' }, take: 1 } : false,
+        },
+      } : false,
     },
     orderBy: { createdAt: 'desc' },
     take: limit,

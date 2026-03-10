@@ -496,6 +496,80 @@
     </div>
   </div>
 
+  <!-- Match Details Modal -->
+  <div class="modal" id="matchDetailsModal">
+    <div class="modal-content" style="max-width: 900px;">
+      <div class="modal-header">
+        <h2>🔗 Match Details</h2>
+        <button class="modal-close" onclick="closeMatchDetailsModal()">×</button>
+      </div>
+      
+      <div class="match-details-container">
+        <div class="match-column">
+          <h3 style="color: #d32f2f;">📦 Source Product</h3>
+          <div class="match-product-info" id="sourceProductInfo"></div>
+        </div>
+        <div class="match-column">
+          <h3 style="color: #388e3c;">✨ Suggested Match</h3>
+          <div class="match-product-info" id="suggestedProductInfo"></div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #eee;">
+        <strong>Confidence:</strong> <span id="matchConfidence"></span>
+        <div id="matchSignals" style="margin-top: 0.5rem; color: #666; font-size: 0.9rem;"></div>
+      </div>
+      
+      <div class="match-actions" id="matchActions" style="margin-top: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
+    </div>
+  </div>
+
+  <style>
+    .match-details-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+    .match-column {
+      background: #f8f9fa;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+    .match-product-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .match-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .match-field label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #666;
+      font-weight: 600;
+    }
+    .match-field span {
+      font-size: 0.95rem;
+      color: #333;
+    }
+    .match-field span.missing {
+      color: #999;
+      font-style: italic;
+    }
+    .match-field .price-value {
+      font-weight: 600;
+      color: #1a1a2e;
+      font-size: 1.1rem;
+    }
+    .match-field .price-per-unit {
+      color: #666;
+      font-size: 0.85rem;
+    }
+  </style>
+
   <div class="modal" id="productModal">
     <div class="modal-content">
       <div class="modal-header">
@@ -865,7 +939,7 @@ async function loadMatchSuggestions() {
           `<button class="btn btn-secondary" style="padding:2px 8px;font-size:0.8rem;margin-right:4px" onclick="fixMatchSuggestion('${r.id}')">✎ Fix</button>` +
           `<button class="btn btn-danger" style="padding:2px 8px;font-size:0.8rem" onclick="rejectMatchSuggestion('${r.id}')">✕ Reject</button>`
         : r.status;
-      return `<tr><td>${sourceName}</td><td>${suggestedName}${suggestedBrand ? '<br><small>' + suggestedBrand + '</small>' : ''}</td><td>${confidence}<br>${signals}</td><td><span class="status-badge ${r.status}">${r.status}</span></td><td>${new Date(r.createdAt).toLocaleString()}</td><td>${actions}</td></tr>`;
+      return `<tr class="match-suggestion-row" data-suggestion-id="${r.id}" onclick="showMatchDetails('${r.id}')"><td>${sourceName}</td><td>${suggestedName}${suggestedBrand ? '<br><small>' + suggestedBrand + '</small>' : ''}</td><td>${confidence}<br>${signals}</td><td><span class="status-badge ${r.status}">${r.status}</span></td><td>${new Date(r.createdAt).toLocaleString()}</td><td onclick="event.stopPropagation();">${actions}</td></tr>`;
     }).join('');
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6">Error: ${e.message}</td></tr>`;
@@ -959,6 +1033,204 @@ async function fixMatchSuggestion(id) {
     const data2 = await res2.json();
     if (!res2.ok) throw new Error(data2.error || 'Approve failed');
     
+    await loadMatchReviewStats();
+    await loadMatchSuggestions();
+  } catch (e) {
+    alert('Error: '+e.message);
+  }
+}
+
+// ========== MATCH DETAILS MODAL FUNCTIONS ==========
+
+let currentMatchSuggestionId = null;
+
+function formatPrice(cents) {
+  if (cents == null || cents === undefined) return null;
+  return (cents / 100).toFixed(2) + ' €';
+}
+
+function formatUnit(unitCount, unitType) {
+  if (unitCount == null && !unitType) return null;
+  if (unitCount && unitType) return `${unitCount} ${unitType}`;
+  if (unitCount) return String(unitCount);
+  return unitType || null;
+}
+
+function renderProductDetails(product, isSource) {
+  if (!product) {
+    return '<div class="match-field"><span class="missing">No data available</span></div>';
+  }
+  
+  const fields = [];
+  
+  // Name
+  fields.push(`<div class="match-field"><label>Name</label><span>${product.name || '<span class="missing">-</span>'}</span></div>`);
+  
+  // Brand
+  fields.push(`<div class="match-field"><label>Brand</label><span>${product.brand || '<span class="missing">-</span>'}</span></div>`);
+  
+  // Units (unitCount/unitType)
+  const unitStr = formatUnit(product.unitCount, product.unitType);
+  fields.push(`<div class="match-field"><label>Units</label><span>${unitStr || '<span class="missing">-</span>'}</span></div>`);
+  
+  // Price
+  const price = formatPrice(product.priceCents);
+  fields.push(`<div class="match-field"><label>Price</label><span class="${price ? 'price-value' : 'missing'}">${price || '<span class="missing">-</span>'}</span></div>`);
+  
+  // Price per kg/l
+  const pricePerUnit = product.pricePerKgCents != null 
+    ? (product.pricePerKgCents / 100).toFixed(2) + ' €/' + (product.priceUnit || 'kg')
+    : null;
+  fields.push(`<div class="match-field"><label>Price/kg</label><span class="price-per-unit">${pricePerUnit || '<span class="missing">-</span>'}</span></div>`);
+  
+  // EAN (only for suggested product)
+  if (!isSource && product.ean) {
+    fields.push(`<div class="match-field"><label>EAN</label><span><code>${product.ean}</code></span></div>`);
+  }
+  
+  // Internal ID / URL (only for source)
+  if (isSource) {
+    if (product.internalId) {
+      fields.push(`<div class="match-field"><label>Internal ID</label><span><code>${product.internalId}</code></span></div>`);
+    }
+    if (product.url) {
+      const urlShort = product.url.length > 50 ? product.url.substring(0, 50) + '...' : product.url;
+      fields.push(`<div class="match-field"><label>URL</label><span><code title="${product.url}">${urlShort}</code></span></div>`);
+    }
+  }
+  
+  return fields.join('');
+}
+
+async function showMatchDetails(suggestionId) {
+  currentMatchSuggestionId = suggestionId;
+  const modal = document.getElementById('matchDetailsModal');
+  
+  try {
+    const res = await fetch(API+`/api/match-review/suggestions/${suggestionId}`);
+    const data = await res.json();
+    
+    if (!res.ok) {
+      alert('Error loading match details: ' + (data.error || 'Unknown error'));
+      return;
+    }
+    
+    // Render source product info
+    document.getElementById('sourceProductInfo').innerHTML = renderProductDetails(data.source, true);
+    
+    // Render suggested product info
+    document.getElementById('suggestedProductInfo').innerHTML = renderProductDetails(data.suggestedProduct, false);
+    
+    // Confidence
+    document.getElementById('matchConfidence').textContent = data.confidence 
+      ? (data.confidence * 100).toFixed(1) + '%' 
+      : '-';
+    
+    // Signals
+    let signalsHtml = '';
+    if (data.signals) {
+      if (data.signals.nameSimilarity != null) {
+        signalsHtml += `name similarity: ${(data.signals.nameSimilarity * 100).toFixed(1)}%`;
+      }
+      if (data.signals.finalScore != null) {
+        signalsHtml += signalsHtml ? ` | ` : '';
+        signalsHtml += `final score: ${(data.signals.finalScore * 100).toFixed(1)}%`;
+      }
+    }
+    document.getElementById('matchSignals').textContent = signalsHtml;
+    
+    // Actions
+    const actionsContainer = document.getElementById('matchActions');
+    if (data.status === 'pending') {
+      actionsContainer.innerHTML = `
+        <button class="btn btn-primary" onclick="approveMatchSuggestionFromModal()">✓ Approve Match</button>
+        <button class="btn btn-secondary" onclick="fixMatchSuggestionFromModal()">✎ Fix (Choose Different)</button>
+        <button class="btn btn-danger" onclick="rejectMatchSuggestionFromModal()">✕ Reject</button>
+      `;
+    } else {
+      actionsContainer.innerHTML = `<span class="status-badge ${data.status}">${data.status}</span>`;
+    }
+    
+    modal.classList.add('active');
+  } catch (e) {
+    console.error('Error loading match details:', e);
+    alert('Error loading match details: ' + e.message);
+  }
+}
+
+function closeMatchDetailsModal() {
+  document.getElementById('matchDetailsModal').classList.remove('active');
+  currentMatchSuggestionId = null;
+}
+
+async function approveMatchSuggestionFromModal() {
+  if (!currentMatchSuggestionId) return;
+  if (!confirm('Approve this match? This will create a persistent mapping.')) return;
+  
+  try {
+    const res = await fetch(API+`/api/match-review/suggestions/${currentMatchSuggestionId}/approve`, { method:'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Approve failed');
+    
+    closeMatchDetailsModal();
+    await loadMatchReviewStats();
+    await loadMatchSuggestions();
+  } catch (e) {
+    alert('Error: '+e.message);
+  }
+}
+
+async function rejectMatchSuggestionFromModal() {
+  if (!currentMatchSuggestionId) return;
+  if (!confirm('Reject this suggestion?')) return;
+  
+  try {
+    const res = await fetch(API+`/api/match-review/suggestions/${currentMatchSuggestionId}/reject`, { method:'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Reject failed');
+    
+    closeMatchDetailsModal();
+    await loadMatchReviewStats();
+    await loadMatchSuggestions();
+  } catch (e) {
+    alert('Error: '+e.message);
+  }
+}
+
+async function fixMatchSuggestionFromModal() {
+  if (!currentMatchSuggestionId) return;
+  
+  const query = prompt('Search for correct product (name, brand, or EAN):');
+  if (!query || query.length < 2) return;
+  
+  try {
+    const res = await fetch(API+`/api/match-review/products/search?q=${encodeURIComponent(query)}&limit=10`);
+    const products = await res.json();
+    
+    if (!Array.isArray(products) || products.length === 0) {
+      alert('No products found matching: ' + query);
+      return;
+    }
+    
+    const options = products.map((p, i) => `${i+1}. ${p.name} (${p.brand || 'no brand'}) - ${p.ean || 'no EAN'}`).join('\n');
+    const selection = prompt(`Select product number to map:\n${options}\n\nEnter number (or 0 to cancel):`);
+    
+    const idx = parseInt(selection, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= products.length) return;
+    
+    const selectedProduct = products[idx];
+    const confirmMsg = `Map to: ${selectedProduct.name} (${selectedProduct.brand || 'no brand'})?`;
+    if (!confirm(confirmMsg)) return;
+    
+    const res2 = await fetch(API+`/api/match-review/suggestions/${currentMatchSuggestionId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId: selectedProduct.id })
+    });
+    const data2 = await res2.json();
+    if (!res2.ok) throw new Error(data2.error || 'Approve failed');
+    
+    closeMatchDetailsModal();
     await loadMatchReviewStats();
     await loadMatchSuggestions();
   } catch (e) {
