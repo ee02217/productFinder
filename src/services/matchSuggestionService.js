@@ -19,6 +19,7 @@ const {
   levenshteinSimilarity,
   brandAwareNameNormalization,
   isQuantityCompatible,
+  tokenContainmentRatio,
 } = require('../utils/nameNormalization');
 
 const prisma = new PrismaClient();
@@ -38,6 +39,20 @@ const CONFIG = {
   MIN_NAME_LENGTH_FOR_FILTER: 3,
   // Max candidates to retrieve (reduced from 500 since we're filtering)
   MAX_CANDIDATES: 100,
+};
+
+// Generic-name uplift configuration for suggestions
+// Applies to short generic names that match a branded product well
+const GENERIC_NAME_UPLIFT = {
+  // Minimum brand similarity to qualify for uplift (0.95 = very strong)
+  MIN_BRAND_SIMILARITY: 0.95,
+  // Minimum token containment ratio (0.8 = 80% of source tokens found in candidate)
+  MIN_CONTAINMENT_RATIO: 0.8,
+  // Uplift amount (conservative: +0.03 to +0.06)
+  UPLIFT_MIN: 0.03,
+  UPLIFT_MAX: 0.06,
+  // Maximum final confidence (cap at 1.0)
+  MAX_CONFIDENCE: 1.0,
 };
 
 /**
@@ -171,6 +186,64 @@ async function findUnmatchedForSuggestion(retailer, options = {}) {
  * Generate a single match suggestion using brand-aware similarity scoring
  * Includes brand similarity and quantity compatibility in the scoring
  */
+
+/**
+ * Check if a match qualifies for generic-name uplift (for suggestions)
+ * 
+ * @param {string} sourceName - The source product name
+ * @param {Object} candidate - The candidate product
+ * @param {Object} signals - The scoring signals
+ * @returns {Object|null} - { upliftAmount, upliftReason, upliftDetails } if qualifies, null otherwise
+ */
+function calculateGenericNameUpliftForSuggestion(sourceName, sourceBrand, sourceUnitCount, sourceUnitType, candidate, signals) {
+  const { brandSimilarity, qtyCompatible, finalScore } = signals;
+  
+  // Check brand similarity threshold
+  const normBrand = normalizeForComparison(sourceBrand);
+  const normCandidateBrand = normalizeForComparison(candidate.brand);
+  const exactBrandMatch = normBrand && normCandidateBrand && normBrand === normCandidateBrand;
+  const strongBrandSimilarity = brandSimilarity >= GENERIC_NAME_UPLIFT.MIN_BRAND_SIMILARITY;
+  
+  if (!exactBrandMatch && !strongBrandSimilarity) {
+    return null;
+  }
+  
+  // Check quantity compatibility
+  if (qtyCompatible !== true) {
+    return null;
+  }
+  
+  // Check token containment ratio
+  const containmentRatio = tokenContainmentRatio(sourceName, candidate.name);
+  if (containmentRatio < GENERIC_NAME_UPLIFT.MIN_CONTAINMENT_RATIO) {
+    return null;
+  }
+  
+  // Calculate uplift amount (conservative)
+  // Higher containment ratio gets slightly higher uplift
+  let upliftAmount = GENERIC_NAME_UPLIFT.UPLIFT_MIN;
+  if (containmentRatio >= 0.9) {
+    upliftAmount = GENERIC_NAME_UPLIFT.UPLIFT_MAX;
+  } else if (containmentRatio >= 0.85) {
+    upliftAmount = (GENERIC_NAME_UPLIFT.UPLIFT_MIN + GENERIC_NAME_UPLIFT.UPLIFT_MAX) / 2;
+  }
+  
+  // Cap at maximum confidence
+  const newConfidence = Math.min(finalScore + upliftAmount, GENERIC_NAME_UPLIFT.MAX_CONFIDENCE);
+  upliftAmount = newConfidence - finalScore;
+  
+  return {
+    upliftAmount,
+    upliftReason: 'generic_name_uplift',
+    upliftDetails: {
+      brandSimilarity,
+      exactBrandMatch,
+      containmentRatio,
+      qtyCompatible,
+    },
+  };
+}
+
 async function generateSingleSuggestion(retailer, unmatchedRow) {
   const sourceName = unmatchedRow.name;
   if (!sourceName) return null;
@@ -282,6 +355,26 @@ async function generateSingleSuggestion(retailer, unmatchedRow) {
   
   if (!bestMatch) return null;
   
+  // Apply generic-name uplift if conditions are met
+  let finalConfidence = bestScore;
+  let upliftSignal = null;
+  
+  const uplift = calculateGenericNameUpliftForSuggestion(
+    sourceName, sourceBrand, sourceUnitCount, sourceUnitType, bestMatch, bestSignals
+  );
+  if (uplift) {
+    upliftSignal = uplift;
+    finalConfidence = Math.min(bestScore + uplift.upliftAmount, GENERIC_NAME_UPLIFT.MAX_CONFIDENCE);
+  }
+  
+  // Add uplift info to signals for transparency
+  const finalSignals = {
+    ...bestSignals,
+    upliftApplied: upliftSignal ? true : false,
+    upliftAmount: upliftSignal ? upliftSignal.upliftAmount : 0,
+    upliftReason: upliftSignal ? upliftSignal.upliftReason : null,
+  };
+  
   // Create the suggestion - use internalId if available, otherwise use URL
   const suggestion = await prisma.matchSuggestion.create({
     data: {
@@ -290,8 +383,8 @@ async function generateSingleSuggestion(retailer, unmatchedRow) {
       sourceUrl: unmatchedRow.url || null,
       sourceName: unmatchedRow.name,
       suggestedProductId: bestMatch.id,
-      confidence: bestScore,
-      signals: bestSignals,
+      confidence: finalConfidence,
+      signals: finalSignals,
       status: 'pending',
     },
   });
@@ -563,12 +656,14 @@ module.exports = {
   getConfig, setConfig, findUnmatchedForSuggestion, generateSuggestions,
   generateSingleSuggestion, getSuggestions, approveSuggestion, rejectSuggestion,
   getMapping, searchProducts, getSuggestionStats, CONFIG,
+  GENERIC_NAME_UPLIFT,
   // Export helper functions for testing and external use
   normalizeForComparison,
   similarity,
   hybridSimilarity,
   levenshteinSimilarity,
   isQuantityCompatible,
+  tokenContainmentRatio,
   enrichWithTempProduct,
   brandAwareNameNormalization,
   // Also export tokenization for testing

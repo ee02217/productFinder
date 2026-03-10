@@ -22,12 +22,27 @@ const {
   levenshteinSimilarity,
   brandAwareNameNormalization,
   isQuantityCompatible,
+  tokenContainmentRatio,
 } = require('../../utils/nameNormalization');
 
 // Thresholds for matching (strict for Pingo Doce since no EAN)
 const SIMILARITY_THRESHOLDS = {
   HIGH: 0.92,    // Auto-match if similarity >= 0.92
   MEDIUM: 0.75,  // Manual review threshold - but DOES NOT auto-link
+};
+
+// Generic-name uplift configuration
+// Applies to short generic names that match a branded product well
+const GENERIC_NAME_UPLIFT = {
+  // Minimum brand similarity to qualify for uplift (0.95 = very strong)
+  MIN_BRAND_SIMILARITY: 0.95,
+  // Minimum token containment ratio (0.8 = 80% of source tokens found in candidate)
+  MIN_CONTAINMENT_RATIO: 0.8,
+  // Uplift amount (conservative: +0.03 to +0.06)
+  UPLIFT_MIN: 0.03,
+  UPLIFT_MAX: 0.06,
+  // Maximum final confidence (cap at 1.0)
+  MAX_CONFIDENCE: 1.0,
 };
 
 /**
@@ -232,36 +247,57 @@ async function findProductSafe(prisma, parsed) {
     };
   }
   
-  const { product, score } = similarityResult;
+  const { product, score, signals } = similarityResult;
+  
+  // Apply generic-name uplift if conditions are met
+  let finalConfidence = score;
+  let upliftSignal = null;
+  
+  // Only apply uplift to matches in the review band (not already high-confidence)
+  if (score >= SIMILARITY_THRESHOLDS.MEDIUM && score < SIMILARITY_THRESHOLDS.HIGH && signals) {
+    const uplift = calculateGenericNameUplift(parsed, product, signals);
+    if (uplift) {
+      upliftSignal = uplift;
+      finalConfidence = Math.min(score + uplift.upliftAmount, GENERIC_NAME_UPLIFT.MAX_CONFIDENCE);
+    }
+  }
   
   // TIER 2: High similarity - auto-match
-  if (score >= SIMILARITY_THRESHOLDS.HIGH) {
+  // After uplift, check if we crossed the threshold
+  if (finalConfidence >= SIMILARITY_THRESHOLDS.HIGH) {
     return {
       product,
-      confidence: score,
-      tier: 'tier2_high',
-      reason: `similarity_high:${score.toFixed(2)}`,
-      matchKey: `similarity:${score.toFixed(2)}`,
+      confidence: finalConfidence,
+      tier: upliftSignal ? 'tier2_high_uplift' : 'tier2_high',
+      reason: upliftSignal 
+        ? `similarity_high_uplift:${finalConfidence.toFixed(2)}_${upliftSignal.upliftReason}`
+        : `similarity_high:${finalConfidence.toFixed(2)}`,
+      matchKey: `similarity:${finalConfidence.toFixed(2)}`,
+      uplift: upliftSignal,
     };
   }
   
   // TIER 3: Medium similarity - UNMATCHED (no auto-link)
   // This requires manual review, does NOT auto-link
-  if (score >= SIMILARITY_THRESHOLDS.MEDIUM) {
+  // Still include uplift signal for transparency
+  if (finalConfidence >= SIMILARITY_THRESHOLDS.MEDIUM) {
     return {
       product: null,  // CHANGED: return null instead of product
-      confidence: score,
-      tier: 'tier3_review',  // Changed tier name to indicate review needed
-      reason: `similarity_review_requires_manual:${score.toFixed(2)}`,
+      confidence: finalConfidence,
+      tier: upliftSignal ? 'tier3_review_uplift' : 'tier3_review',  // Changed tier name to indicate review needed
+      reason: upliftSignal 
+        ? `similarity_review_requires_manual:${finalConfidence.toFixed(2)}_${upliftSignal.upliftReason}`
+        : `similarity_review_requires_manual:${finalConfidence.toFixed(2)}`,
+      uplift: upliftSignal,
     };
   }
   
   // Below threshold - no match
   return {
     product: null,
-    confidence: score,
+    confidence: finalConfidence,
     tier: null,
-    reason: `below_threshold:${score.toFixed(2)}`,
+    reason: `below_threshold:${finalConfidence.toFixed(2)}`,
   };
 }
 
@@ -362,10 +398,75 @@ function findBestSimilarityMatch(candidates, parsed) {
   return { product: bestMatch, score: bestScore, reason: bestReason };
 }
 
+/**
+ * Check if a match qualifies for generic-name uplift
+ * 
+ * Uplift applies when:
+ * - Brand similarity is strong (>=0.95 or exact normalized brand match)
+ * - Quantity is compatible (same unit type, within tolerance)
+ * - Source name tokens are mostly contained in candidate name (>=0.8)
+ * - No brand mismatch penalty was triggered
+ * 
+ * @param {Object} parsed - The parsed source product
+ * @param {Object} candidate - The candidate product
+ * @param {Object} signals - The scoring signals from findBestSimilarityMatch
+ * @returns {Object|null} - { upliftAmount, upliftReason, upliftDetails } if qualifies, null otherwise
+ */
+function calculateGenericNameUplift(parsed, candidate, signals) {
+  const { brandSimilarity, qtyCompatible, finalScore } = signals;
+  
+  // Check brand similarity threshold
+  const normBrand = normalizeForComparison(parsed.brand);
+  const normCandidateBrand = normalizeForComparison(candidate.brand);
+  const exactBrandMatch = normBrand && normCandidateBrand && normBrand === normCandidateBrand;
+  const strongBrandSimilarity = brandSimilarity >= GENERIC_NAME_UPLIFT.MIN_BRAND_SIMILARITY;
+  
+  if (!exactBrandMatch && !strongBrandSimilarity) {
+    return null;
+  }
+  
+  // Check quantity compatibility
+  if (qtyCompatible !== true) {
+    return null;
+  }
+  
+  // Check token containment ratio
+  const containmentRatio = tokenContainmentRatio(parsed.name, candidate.name);
+  if (containmentRatio < GENERIC_NAME_UPLIFT.MIN_CONTAINMENT_RATIO) {
+    return null;
+  }
+  
+  // Calculate uplift amount (conservative)
+  // Higher containment ratio gets slightly higher uplift
+  let upliftAmount = GENERIC_NAME_UPLIFT.UPLIFT_MIN;
+  if (containmentRatio >= 0.9) {
+    upliftAmount = GENERIC_NAME_UPLIFT.UPLIFT_MAX;
+  } else if (containmentRatio >= 0.85) {
+    upliftAmount = (GENERIC_NAME_UPLIFT.UPLIFT_MIN + GENERIC_NAME_UPLIFT.UPLIFT_MAX) / 2;
+  }
+  
+  // Cap at maximum confidence
+  const newConfidence = Math.min(finalScore + upliftAmount, GENERIC_NAME_UPLIFT.MAX_CONFIDENCE);
+  upliftAmount = newConfidence - finalScore;
+  
+  return {
+    upliftAmount,
+    upliftReason: 'generic_name_uplift',
+    upliftDetails: {
+      brandSimilarity,
+      exactBrandMatch,
+      containmentRatio,
+      qtyCompatible,
+    },
+  };
+}
+
 module.exports = {
   findProduct,
   similarity,
   normalizeForComparison,
   SIMILARITY_THRESHOLDS,
   isQuantityCompatible,
+  GENERIC_NAME_UPLIFT,
+  calculateGenericNameUplift,
 };

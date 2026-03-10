@@ -186,6 +186,34 @@ function isQuantityCompatible(q1, q2) {
   return ratio >= 0.95 && ratio <= 1.05;
 }
 
+/**
+ * Calculate token containment ratio
+ * Measures how many tokens from source are contained in candidate
+ * Returns ratio of source tokens found in candidate (0-1)
+ * 
+ * This is key for generic-name uplift: if source name is short and its tokens
+ * are all present in candidate name, it's likely a generic/short version of the same product
+ */
+function tokenContainmentRatio(sourceName, candidateName) {
+  const sourceTokens = tokenize(sourceName);
+  const candidateTokens = tokenize(candidateName);
+  
+  if (sourceTokens.length === 0) return 0;
+  if (candidateTokens.length === 0) return 0;
+  
+  const candidateTokenSet = new Set(candidateTokens);
+  
+  // Count how many source tokens are contained in candidate
+  let containedCount = 0;
+  for (const token of sourceTokens) {
+    if (candidateTokenSet.has(token)) {
+      containedCount++;
+    }
+  }
+  
+  return containedCount / sourceTokens.length;
+}
+
 module.exports = {
   normalizeForComparison,
   tokenize,
@@ -196,4 +224,5 @@ module.exports = {
   brandAwareNameNormalization,
   stripTokens,
   isQuantityCompatible,
+  tokenContainmentRatio,
 };
