@@ -146,35 +146,21 @@ router.get('/suggestions/:id', async (req, res) => {
       return res.status(404).json({ error: 'Suggestion not found' });
     }
     
-    // Try to get source details from RetailerUnmatched or TempProduct
+    // Try to get source details from RetailerUnmatched AND TempProduct
+    // When both exist, merge fields preferring tempProduct values
     let sourceDetails = null;
     
     if (suggestion.sourceInternalId || suggestion.sourceUrl) {
-      // Try RetailerUnmatched first (no prices in this model)
-      const unmatched = await prisma.retailerUnmatched.findFirst({
-        where: {
-          retailer: suggestion.retailer,
-          ...(suggestion.sourceInternalId ? { internalId: suggestion.sourceInternalId } : {}),
-          ...(suggestion.sourceUrl && !suggestion.sourceInternalId ? { url: suggestion.sourceUrl } : {}),
-        },
-      });
-      
-      if (unmatched) {
-        sourceDetails = {
-          name: unmatched.name,
-          brand: null, // RetailerUnmatched doesn't have brand
-          ean: unmatched.ean,
-          unitCount: null,
-          unitType: null,
-          priceCents: null,
-          pricePerKgCents: null,
-          priceUnit: null,
-          internalId: unmatched.internalId,
-          url: unmatched.url,
-        };
-      } else {
-        // Try TempProduct
-        const tempProduct = await prisma.tempProduct.findFirst({
+      // Fetch both RetailerUnmatched and TempProduct in parallel
+      const [unmatched, tempProduct] = await Promise.all([
+        prisma.retailerUnmatched.findFirst({
+          where: {
+            retailer: suggestion.retailer,
+            ...(suggestion.sourceInternalId ? { internalId: suggestion.sourceInternalId } : {}),
+            ...(suggestion.sourceUrl && !suggestion.sourceInternalId ? { url: suggestion.sourceUrl } : {}),
+          },
+        }),
+        prisma.tempProduct.findFirst({
           where: {
             retailer: suggestion.retailer,
             ...(suggestion.sourceInternalId ? { internalId: suggestion.sourceInternalId } : {}),
@@ -186,23 +172,32 @@ router.get('/suggestions/:id', async (req, res) => {
               take: 1,
             },
           },
-        });
+        }),
+      ]);
+      
+      // Merge: prefer tempProduct values, fallback to retailerUnmatched
+      if (unmatched || tempProduct) {
+        const tempLatestPrice = tempProduct?.prices?.[0] || null;
         
-        if (tempProduct) {
-          const latestPrice = tempProduct.prices?.[0] || null;
-          sourceDetails = {
-            name: tempProduct.name,
-            brand: tempProduct.brand,
-            ean: tempProduct.ean,
-            unitCount: tempProduct.unitCount,
-            unitType: tempProduct.unitType,
-            priceCents: latestPrice?.priceCents || null,
-            pricePerKgCents: latestPrice?.pricePerKgCents || null,
-            priceUnit: latestPrice?.priceUnit || null,
-            internalId: tempProduct.internalId,
-            url: tempProduct.sourceUrl,
-          };
-        }
+        sourceDetails = {
+          // Prefer tempProduct.name, fallback to unmatched.name
+          name: tempProduct?.name ?? unmatched?.name ?? null,
+          // Only tempProduct has brand
+          brand: tempProduct?.brand ?? null,
+          // Prefer tempProduct EAN, fallback to unmatched EAN
+          ean: tempProduct?.ean ?? unmatched?.ean ?? null,
+          // Only tempProduct has unitCount/unitType
+          unitCount: tempProduct?.unitCount ?? null,
+          unitType: tempProduct?.unitType ?? null,
+          // Prefer tempProduct prices, fallback to null (retailerUnmatched has no prices)
+          priceCents: tempLatestPrice?.priceCents ?? null,
+          pricePerKgCents: tempLatestPrice?.pricePerKgCents ?? null,
+          priceUnit: tempLatestPrice?.priceUnit ?? null,
+          // Internal ID: prefer tempProduct, fallback to unmatched
+          internalId: tempProduct?.internalId ?? unmatched?.internalId ?? null,
+          // URL: prefer tempProduct sourceUrl, fallback to unmatched url
+          url: tempProduct?.sourceUrl ?? unmatched?.url ?? null,
+        };
       }
     }
     
