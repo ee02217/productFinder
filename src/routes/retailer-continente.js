@@ -3,184 +3,78 @@ const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Continente uses the same scraper system as the original queue-based scraper
-// We wrap the scraper.js functionality in retailer-style endpoints
+const {
+  startBackground,
+  resumeBackground,
+  requestStop,
+  getRuntimeStatus,
+  listJobs,
+  listUnmatched,
+} = require('../retailers/continente/runner');
 
-// Get current scrape status from scraper.js (we'll read directly from DB)
-async function getContinenteRuntimeStatus() {
-  const runningJob = await prisma.scrapeJob.findFirst({
-    where: { status: 'running' },
-    orderBy: { startedAt: 'desc' },
-  });
-  
-  const pendingCount = await prisma.scrapeJob.count({
-    where: { status: 'pending' },
-  });
-  
-  return {
-    isScraping: !!runningJob,
-    currentJob: runningJob,
-    pendingJobs: pendingCount,
-  };
-}
-
-// List Continente jobs
-async function listContinenteJobs(limit = 20) {
-  return await prisma.scrapeJob.findMany({
-    orderBy: { startedAt: 'desc' },
-    take: limit,
-  });
-}
-
-// Resume a job
-async function resumeContinenteJob(jobId, options = {}) {
-  const job = await prisma.scrapeJob.findUnique({ where: { id: jobId } });
-  if (!job) {
-    throw new Error('Job not found');
-  }
-  
-  const settings = await prisma.settings.findUnique({ where: { id: 'default' } });
-  const delayMs = options.delayMs || settings?.delayMs || 2000;
-  
-  // Re-queue the job
-  await prisma.scrapeJob.update({
-    where: { id: jobId },
-    data: { 
-      status: 'pending',
-      cursorStart: job.cursorEnd || 0,
-      delayMs,
-      completedAt: null,
-    },
-  });
-  
-  // Trigger queue processing if not already running
-  // The scraper.js should handle this automatically
-  
-  return { jobId, status: 'resumed' };
-}
-
+// Start a new Continente scrape (single job)
 router.post('/start', async (req, res) => {
   try {
-    const { dryRun = false, limit = 0, delayMs = 400, categories } = req.body || {};
-    
-    // If categories provided, add them to queue
-    if (categories && Array.isArray(categories) && categories.length > 0) {
-      const jobs = [];
-      for (const cat of categories) {
-        const job = await prisma.scrapeJob.create({
-          data: {
-            category: cat.value || cat,
-            label: cat.label || cat.value || cat,
-            limit: parseInt(limit, 10) || 0,
-            cursorStart: 0,
-            status: 'pending',
-            delayMs: delayMs || 400,
-          },
-        });
-        jobs.push(job);
-      }
-      return res.json({ status: 'queued', jobIds: jobs.map(j => j.id), count: jobs.length });
-    }
-    
-    // Default: start scraping all categories (legacy behavior)
-    // For now, require explicit categories or return an error
-    // This matches the new UI flow where user selects categories first
-    const settings = await prisma.settings.findUnique({ where: { id: 'default' } });
-    const defaultDelay = settings?.delayMs || 2000;
-    
-    // Get all available categories from DB
-    const dbCategories = await prisma.category.findMany({
-      where: { parentId: null }, // Get root categories
-      orderBy: { label: 'asc' },
-    });
-    
-    if (dbCategories.length === 0) {
-      return res.status(400).json({ error: 'No categories found in database. Please seed categories first.' });
-    }
-    
-    const jobs = [];
-    for (const cat of dbCategories) {
-      const job = await prisma.scrapeJob.create({
-        data: {
-          category: cat.urlPath || cat.label,
-          label: cat.label,
-          limit: parseInt(limit, 10) || 0,
-          cursorStart: 0,
-          status: 'pending',
-          delayMs: delayMs || defaultDelay,
-        },
-      });
-      jobs.push(job);
-    }
-    
-    res.json({ status: 'queued', jobIds: jobs.map(j => j.id), count: jobs.length });
+    const { dryRun = false, limit = 500, delayMs = 400 } = req.body || {};
+    const out = await startBackground({ dryRun, limit, delayMs });
+    res.json({ status: 'started', ...out });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
+// Resume a stopped/failed job
 router.post('/resume/:jobId', async (req, res) => {
   try {
     const { delayMs = 400 } = req.body || {};
-    const out = await resumeContinenteJob(req.params.jobId, { delayMs });
+    const out = await resumeBackground(req.params.jobId, { delayMs });
     res.json({ status: 'resumed', ...out });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
+// Stop current scrape
 router.post('/stop', async (req, res) => {
   try {
-    const now = new Date();
-    
-    // Cancel running + pending jobs
-    const canceled = await prisma.scrapeJob.updateMany({
-      where: { status: { in: ['running', 'pending'] } },
-      data: { status: 'canceled', completedAt: now },
-    });
-    
-    res.json({ status: 'stopping', canceledJobs: canceled.count });
+    const out = await requestStop();
+    res.json({ status: 'stopping', ...out });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// Get current status
 router.get('/status', async (req, res) => {
   try {
-    const [jobs, status] = await Promise.all([
-      listContinenteJobs(1),
-      getContinenteRuntimeStatus(),
-    ]);
+    const jobs = await listJobs(1);
     res.json({
-      running: status.isScraping,
+      ...getRuntimeStatus(),
       latestJob: jobs[0] || null,
-      pendingJobs: status.pendingJobs,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// List jobs
 router.get('/jobs', async (req, res) => {
   try {
     const limit = Number.isFinite(parseInt(req.query.limit, 10)) ? parseInt(req.query.limit, 10) : 30;
-    const jobs = await listContinenteJobs(limit);
-    
-    // Transform to match expected format (processed/totalUrls, matched, etc.)
-    const transformed = jobs.map(j => ({
-      id: j.id,
-      startedAt: j.startedAt,
-      status: j.status,
-      processed: j.cursorEnd || 0,
-      totalUrls: j.limit || 0,
-      matched: 0, // Continente doesn't track this the same way
-      unmatched: 0,
-      insertedPrices: j.scraped || 0,
-      errors: j.errorCount || 0,
-      completedAt: j.completedAt,
-    }));
-    
-    res.json(transformed);
+    const jobs = await listJobs(limit);
+    res.json(jobs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List unmatched products
+router.get('/unmatched', async (req, res) => {
+  try {
+    const limit = Number.isFinite(parseInt(req.query.limit, 10)) ? parseInt(req.query.limit, 10) : 100;
+    const jobId = req.query.jobId || undefined;
+    const rows = await listUnmatched({ jobId, limit });
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

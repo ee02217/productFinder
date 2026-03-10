@@ -1200,4 +1200,5 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
 }
 
 module.exports = router;
+module.exports.processQueue = processQueue;
 

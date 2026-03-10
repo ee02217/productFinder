@@ -1942,37 +1942,16 @@ async function startContinenteScrape() {
   const delayMs = parseInt(document.getElementById('continenteDelay').value || '400', 10);
   const dryRun = !!document.getElementById('continenteDryRun').checked;
   
-  // Check for selected categories in advanced section
-  const checkboxes = document.querySelectorAll('#scrapeCategoryList input[type="checkbox"]:checked');
-  const selected = Array.from(checkboxes);
-  
   try {
-    let url = API+`/api/retailers/continente/start?limit=${limit}&delayMs=${delayMs}&dryRun=${dryRun}`;
-    let method = 'POST';
-    let body = null;
-    
-    if (selected.length > 0) {
-      // If categories selected, use the queue endpoint with selected categories
-      const categories = selected.map(c => ({ value: c.value, label: c.parentNode.textContent.trim() }));
-      const res = await fetch(API+'/api/scraper/queue', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ categories, limit })
-      });
-      const data = await res.json();
-      if (data.error) { alert(data.error); return; }
-      document.getElementById('continenteStatus').textContent = 'Started job with selected categories: ' + categories.length;
-    } else {
-      // No selection - start with all categories (default behavior)
-      const res = await fetch(API+'/api/retailers/continente/start', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ limit, delayMs, dryRun })
-      });
-      const data = await res.json();
-      if (!res.ok) { alert('Error: ' + (data.error || 'Failed to start')); return; }
-      document.getElementById('continenteStatus').textContent = 'Started job ' + data.jobId;
-    }
+    // Start a single Continente scrape job (dynamic category discovery internally)
+    const res = await fetch(API+'/api/retailers/continente/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ limit, delayMs, dryRun })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert('Error: ' + (data.error || 'Failed to start')); return; }
+    document.getElementById('continenteStatus').textContent = 'Started job ' + data.jobId + ' (dynamic discovery)';
     await loadContinenteJobs();
   } catch (e) {
     alert('Continente start error: ' + e.message);
