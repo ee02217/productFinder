@@ -243,6 +243,7 @@ async function runWithJob(job, options) {
       }
     } catch (err) {
       stats.errors++;
+      stats.processed++; // Count attempted items as processed even if they errored
       await writeUnmatched(prisma, {
         jobId: job.id,
         url,
@@ -254,13 +255,12 @@ async function runWithJob(job, options) {
 
     cursor = idx + 1;
 
-    // Persist progress frequently
-    if (cursor % 20 === 0 || cursor === totalUrls) {
-      await updateJob(job.id, {
-        cursor,
-        ...stats,
-      });
-    }
+    // Persist progress after every item to ensure UI stays updated
+    // (previously used cursor % 20 which caused 0%显示 for small batches)
+    await updateJob(job.id, {
+      cursor,
+      ...stats,
+    });
 
     if (opts.delayMs > 0) {
       await delay(opts.delayMs);
