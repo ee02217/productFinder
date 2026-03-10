@@ -3,6 +3,11 @@
  * 
  * Generates match suggestions for unmatched products that fall in the mid-confidence band.
  * Provides human-in-the-loop review workflow.
+ * 
+ * Key features:
+ * - Brand-aware scoring (prevents cross-brand suggestions)
+ * - Enriches source rows with brand/unit from TempProduct
+ * - Hard brand guard to penalize mismatched brands
  */
 
 const { PrismaClient } = require('@prisma/client');
@@ -16,7 +21,120 @@ const CONFIG = {
   MAX_CONFIDENCE: 0.92,
   // Batch size for processing
   BATCH_SIZE: 100,
+  // Brand mismatch penalty threshold (if normalized brands differ and both are known, heavily penalize)
+  BRAND_MISMATCH_PENALTY: 0.5,
+  // Minimum brand similarity to consider (below = skip)
+  MIN_BRAND_SIMILARITY: 0.6,
 };
+
+/**
+ * Normalize a string for comparison (same as matcher's normalizeForComparison)
+ */
+function normalizeForComparison(str) {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .replace(/[^a-z0-9\s]/g, '')      // Remove special chars
+    .replace(/\s+/g, ' ')             // Normalize whitespace
+    .trim();
+}
+
+/**
+ * Calculate Levenshtein-based similarity (same as matcher's similarity)
+ */
+function similarity(a, b) {
+  if (!a || !b) return 0;
+  const normA = normalizeForComparison(a);
+  const normB = normalizeForComparison(b);
+  
+  if (normA === normB) return 1;
+  if (normA.length === 0 || normB.length === 0) return 0;
+
+  // Simple Levenshtein-based similarity
+  const longer = normA.length > normB.length ? normA : normB;
+  const shorter = normA.length > normB.length ? normB : normA;
+  
+  const editDistance = levenshtein(longer, shorter);
+  return (longer.length - editDistance) / longer.length;
+}
+
+function levenshtein(a, b) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Check if quantity values are compatible
+ */
+function isQuantityCompatible(q1, q2) {
+  if (!q1 || !q2) return null;
+  if (q1.unitType !== q2.unitType) return false;
+  
+  // Allow 5% variance
+  const ratio = q1.unitCount / q2.unitCount;
+  return ratio >= 0.95 && ratio <= 1.05;
+}
+
+/**
+ * Enrich unmatched row with brand/unit from TempProduct
+ * Lookup by retailer + internalId or sourceUrl
+ */
+async function enrichWithTempProduct(retailer, unmatchedRow) {
+  const { internalId, url } = unmatchedRow;
+  
+  if (!internalId && !url) {
+    return unmatchedRow; // Nothing to lookup
+  }
+  
+  // Try to find TempProduct by internalId or URL
+  const tempProduct = await prisma.tempProduct.findFirst({
+    where: {
+      retailer,
+      OR: [
+        { internalId: internalId || '' },
+        { sourceUrl: url || '' },
+      ].filter(cond => cond.internalId || cond.sourceUrl),
+    },
+    select: {
+      brand: true,
+      unitCount: true,
+      unitType: true,
+    },
+  });
+  
+  if (!tempProduct) {
+    return unmatchedRow;
+  }
+  
+  // Return enriched row
+  return {
+    ...unmatchedRow,
+    sourceBrand: tempProduct.brand || null,
+    sourceUnitCount: tempProduct.unitCount || null,
+    sourceUnitType: tempProduct.unitType || null,
+  };
+}
 
 /**
  * Get configuration (can be overridden)
@@ -84,13 +202,18 @@ async function findUnmatchedForSuggestion(retailer, options = {}) {
 }
 
 /**
- * Generate a single match suggestion using the matcher's similarity scoring
+ * Generate a single match suggestion using brand-aware similarity scoring
+ * Includes brand similarity and quantity compatibility in the scoring
  */
 async function generateSingleSuggestion(retailer, unmatchedRow) {
-  const { similarity } = require('../retailers/pingodoce/matcher');
-  
   const sourceName = unmatchedRow.name;
   if (!sourceName) return null;
+  
+  // Enrich with brand/unit from TempProduct
+  const enrichedRow = await enrichWithTempProduct(retailer, unmatchedRow);
+  const sourceBrand = enrichedRow.sourceBrand || null;
+  const sourceUnitCount = enrichedRow.sourceUnitCount || null;
+  const sourceUnitType = enrichedRow.sourceUnitType || null;
   
   // Get all products as candidates (limit to avoid memory issues)
   const candidates = await prisma.product.findMany({
@@ -102,18 +225,80 @@ async function generateSingleSuggestion(retailer, unmatchedRow) {
   let bestSignals = null;
   
   for (const candidate of candidates) {
+    // Calculate name similarity
     const nameSimilarity = similarity(sourceName, candidate.name);
-    // Brand similarity - unmatchedRow doesn't have brand, so use 0
-    // Use full nameSimilarity since we don't have brand info in unmatched rows
-    // The original matchConfidence was already calculated with proper weighting
-    const finalScore = nameSimilarity;
+    
+    // Calculate brand similarity (if both have brand info)
+    let brandSimilarity = 0;
+    let brandMismatch = false;
+    
+    if (sourceBrand && candidate.brand) {
+      brandSimilarity = similarity(sourceBrand, candidate.brand);
+      
+      // Hard brand guard: if normalized brands differ significantly, apply penalty
+      const normSourceBrand = normalizeForComparison(sourceBrand);
+      const normCandidateBrand = normalizeForComparison(candidate.brand);
+      
+      // Check if brands are completely different (not similar at all)
+      if (normSourceBrand && normCandidateBrand) {
+        // If brands exist and are clearly different (no substring match), flag as mismatch
+        const exactMatch = normSourceBrand === normCandidateBrand;
+        const substringMatch = normSourceBrand.includes(normCandidateBrand) || 
+                               normCandidateBrand.includes(normSourceBrand);
+        
+        if (!exactMatch && !substringMatch && brandSimilarity < CONFIG.MIN_BRAND_SIMILARITY) {
+          brandMismatch = true;
+        }
+      }
+    }
+    
+    // Calculate quantity compatibility if both have quantity info
+    let qtyScore = 0;
+    let qtyCompatible = null;
+    if (sourceUnitCount && sourceUnitType && candidate.unitCount && candidate.unitType) {
+      const compatible = isQuantityCompatible(
+        { unitCount: sourceUnitCount, unitType: sourceUnitType },
+        { unitCount: candidate.unitCount, unitType: candidate.unitType }
+      );
+      if (compatible === true) {
+        qtyScore = 1;
+        qtyCompatible = true;
+      } else if (compatible === false) {
+        qtyCompatible = false;
+      }
+    }
+    
+    // Combined scoring (aligned with matcher: 70% name + 30% brand)
+    // If brand mismatch detected, apply heavy penalty
+    let combinedScore;
+    if (brandMismatch) {
+      // Heavily penalize brand mismatches but don't skip entirely (may still be useful for review)
+      combinedScore = (nameSimilarity * 0.7 + brandSimilarity * 0.3) * CONFIG.BRAND_MISMATCH_PENALTY;
+    } else {
+      combinedScore = (nameSimilarity * 0.7 + brandSimilarity * 0.3);
+    }
+    
+    // Add quantity score (30% weight)
+    const finalScore = combinedScore * 0.7 + qtyScore * 0.3;
+    
+    // Skip if brand mismatch and score is too low after penalty
+    if (brandMismatch && finalScore < CONFIG.MIN_CONFIDENCE) {
+      continue;
+    }
     
     if (finalScore > bestScore && finalScore >= CONFIG.MIN_CONFIDENCE && finalScore < CONFIG.MAX_CONFIDENCE) {
       bestScore = finalScore;
       bestMatch = candidate;
       bestSignals = {
         nameSimilarity,
+        brandSimilarity,
+        brandMismatch,
+        qtyScore,
+        qtyCompatible,
         finalScore,
+        sourceBrand,
+        sourceUnitCount,
+        sourceUnitType,
       };
     }
   }
@@ -401,4 +586,10 @@ module.exports = {
   getConfig, setConfig, findUnmatchedForSuggestion, generateSuggestions,
   generateSingleSuggestion, getSuggestions, approveSuggestion, rejectSuggestion,
   getMapping, searchProducts, getSuggestionStats, CONFIG,
+  // Export helper functions for testing and external use
+  normalizeForComparison,
+  similarity,
+  levenshtein,
+  isQuantityCompatible,
+  enrichWithTempProduct,
 };
