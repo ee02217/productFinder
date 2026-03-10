@@ -352,8 +352,11 @@ function stripTrailingQuantity(name) {
 function extractInternalId(url) {
   // Extract product ID from URL: product-name-1234.html or product-name-id.html
   // Prefer the numeric ID at the end before .html
-  const match = url.match(/[-\/](\d{6,})\.html$/i) ||  // 6+ digit IDs (canonical)
-                url.match(/[-\/](\d{3,6})\.html$/i);   // 3-6 digit IDs (promo variants)
+  // Supports 3-12 digit IDs (some Pingo Doce URLs have 9+ digit IDs)
+  // First decode URL to handle encoded characters
+  const decodedUrl = decodeURIComponent(url);
+  const match = decodedUrl.match(/[-\/](\d{6,})\.html$/i) ||  // 6+ digit IDs (canonical)
+                decodedUrl.match(/[-\/](\d{3,6})\.html$/i);   // 3-6 digit IDs (promo variants)
   return match ? match[1] : null;
 }
 

@@ -9,6 +9,28 @@ const { writeMatchedPrice, writeUnmatched, stageTempProductAndPrice, hasMinimumS
 
 const prisma = new PrismaClient();
 
+/**
+ * Check if there's a persistent mapping for this product
+ * If yes, return the mapped product; otherwise return null
+ */
+async function getMappedProduct(retailer, internalId) {
+  if (!internalId) return null;
+  
+  const mapping = await prisma.productMapping.findUnique({
+    where: {
+      retailer_sourceInternalId: {
+        retailer,
+        sourceInternalId: internalId,
+      },
+    },
+    include: {
+      product: true,
+    },
+  });
+  
+  return mapping?.product || null;
+}
+
 const runtime = {
   running: false,
   stopRequested: false,
@@ -182,10 +204,33 @@ async function runWithJob(job, options) {
           });
         }
       } else {
-        // Try to find matching product via fallback matching (no EAN available)
-        const matchResult = await findProduct(prisma, parsed);
+        // FIRST: Check if there's a persistent mapping for this product
+        const mappedProduct = await getMappedProduct(RETAILER, parsed.internalId);
         
-        if (matchResult.product) {
+        if (mappedProduct) {
+          // Found a persistent mapping - use it directly
+          stats.matched++;
+          const result = await writeMatchedPrice(prisma, { product: mappedProduct, parsed, dryRun: opts.dryRun });
+          if (result.inserted) stats.insertedPrices++;
+          if (result.unchanged) stats.unchanged++;
+          
+          // Record for transparency
+          await writeUnmatched(prisma, {
+            jobId: job.id,
+            url,
+            ean: null,
+            name: parsed.name,
+            reason: 'matched_mapping',
+            internalId: parsed.internalId,
+            matchConfidence: 1.0,
+            matchTier: 'mapping',
+            matchReason: 'persistent_mapping',
+          });
+        } else {
+          // No mapping - use fallback matcher
+          const matchResult = await findProduct(prisma, parsed);
+          
+          if (matchResult.product) {
           // Found a match - write price
           stats.matched++;
           const result = await writeMatchedPrice(prisma, { product: matchResult.product, parsed, dryRun: opts.dryRun });
@@ -229,6 +274,7 @@ async function runWithJob(job, options) {
               matchReason: matchResult.reason,
             });
           }
+        }
         }
       }
     } catch (err) {
@@ -395,4 +441,5 @@ module.exports = {
   getRuntimeStatus,
   listJobs,
   listUnmatched,
+  getMappedProduct,
 };

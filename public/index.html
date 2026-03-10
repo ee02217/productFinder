@@ -148,6 +148,7 @@
       <button class="tab" onclick="showTab('scrape')">🚀 Scrape</button>
       <button class="tab" onclick="showTab('categories')">📂 Categories</button>
       <button class="tab" onclick="showTab('unmatched')">🧪 Unmatched</button>
+      <button class="tab" onclick="showTab('match-review')">🔗 Match Review</button>
       <button class="tab" onclick="showTab('settings')">⚙️ Settings</button>
     </div>
     
@@ -437,6 +438,48 @@
       </div>
     </div>
 
+    <!-- Match Review Tab -->
+    <div id="tab-match-review" class="tab-content">
+      <div class="card">
+        <h2>🔗 Match Review - Human-in-the-Loop</h2>
+        <div class="stats" style="margin-bottom: 1rem;">
+          <div class="stat"><div class="stat-value" id="matchReviewPending">-</div><div class="stat-label">Pending</div></div>
+          <div class="stat"><div class="stat-value" id="matchReviewApproved">-</div><div class="stat-label">Approved</div></div>
+          <div class="stat"><div class="stat-value" id="matchReviewRejected">-</div><div class="stat-label">Rejected</div></div>
+          <div class="stat"><div class="stat-value" id="matchReviewMappings">-</div><div class="stat-label">Mappings</div></div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label>Retailer</label>
+            <select id="matchReviewRetailer" style="width:140px;">
+              <option value="pingodoce">Pingo Doce</option>
+              <option value="auchan">Auchan</option>
+              <option value="lidl">Lidl</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="generateMatchSuggestions()">⚡ Generate Suggestions</button>
+          <button class="btn btn-secondary" onclick="loadMatchSuggestions()">🔄 Refresh</button>
+        </div>
+        
+        <div id="matchReviewStatus" style="margin-bottom:1rem;color:#666;"></div>
+        
+        <table class="products-table">
+          <thead>
+            <tr>
+              <th>Source Product</th>
+              <th>→ Suggested Match</th>
+              <th>Confidence</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="matchSuggestionsTable"><tr><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Settings Tab -->
     <div id="tab-settings" class="tab-content">
       <div class="card">
@@ -487,6 +530,7 @@ function showTab(tabId) {
   }
   if (tabId === 'categories') loadCategories();
   if (tabId === 'unmatched') loadTempProducts();
+  if (tabId === 'match-review') loadMatchReview();
   if (tabId === 'settings') loadSettings();
 }
 
@@ -769,6 +813,154 @@ async function rejectTempProduct(id) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Reject failed');
     loadTempProducts();
+  } catch (e) {
+    alert('Error: '+e.message);
+  }
+}
+
+// ========== MATCH REVIEW FUNCTIONS ==========
+
+async function loadMatchReview() {
+  await Promise.all([loadMatchReviewStats(), loadMatchSuggestions()]);
+}
+
+async function loadMatchReviewStats() {
+  try {
+    const retailer = document.getElementById('matchReviewRetailer')?.value || 'pingodoce';
+    const res = await fetch(API+`/api/match-review/stats?retailer=${encodeURIComponent(retailer)}`);
+    const stats = await res.json();
+    document.getElementById('matchReviewPending').textContent = stats.pending || 0;
+    document.getElementById('matchReviewApproved').textContent = stats.approved || 0;
+    document.getElementById('matchReviewRejected').textContent = stats.rejected || 0;
+    document.getElementById('matchReviewMappings').textContent = stats.totalMappings || 0;
+  } catch (e) {
+    console.error('Error loading match review stats:', e);
+  }
+}
+
+async function loadMatchSuggestions() {
+  const tbody = document.getElementById('matchSuggestionsTable');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+  
+  try {
+    const retailer = document.getElementById('matchReviewRetailer')?.value || 'pingodoce';
+    const res = await fetch(API+`/api/match-review/suggestions?retailer=${encodeURIComponent(retailer)}&status=pending&limit=100`);
+    const rows = await res.json();
+    
+    if (!Array.isArray(rows) || rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6">No pending suggestions. Click "Generate Suggestions" to create matches.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = rows.map(r => {
+      const sourceName = r.sourceName || '-';
+      const suggestedName = r.suggestedProduct?.name || '-';
+      const suggestedBrand = r.suggestedProduct?.brand || '';
+      const confidence = r.confidence ? (r.confidence * 100).toFixed(1) + '%' : '-';
+      const signals = r.signals ? 
+        `<span style="color:#666;font-size:0.85rem;">name: ${((r.signals.nameSimilarity||0)*100).toFixed(0)}%</span>` : '';
+      const actions = r.status === 'pending'
+        ? `<button class="btn btn-primary" style="padding:2px 8px;font-size:0.8rem;margin-right:4px" onclick="approveMatchSuggestion('${r.id}')">✓ Approve</button>` +
+          `<button class="btn btn-secondary" style="padding:2px 8px;font-size:0.8rem;margin-right:4px" onclick="fixMatchSuggestion('${r.id}')">✎ Fix</button>` +
+          `<button class="btn btn-danger" style="padding:2px 8px;font-size:0.8rem" onclick="rejectMatchSuggestion('${r.id}')">✕ Reject</button>`
+        : r.status;
+      return `<tr><td>${sourceName}</td><td>${suggestedName}${suggestedBrand ? '<br><small>' + suggestedBrand + '</small>' : ''}</td><td>${confidence}<br>${signals}</td><td><span class="status-badge ${r.status}">${r.status}</span></td><td>${new Date(r.createdAt).toLocaleString()}</td><td>${actions}</td></tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function generateMatchSuggestions() {
+  const statusEl = document.getElementById('matchReviewStatus');
+  statusEl.textContent = 'Generating suggestions...';
+  statusEl.style.color = '#666';
+  
+  try {
+    const retailer = document.getElementById('matchReviewRetailer')?.value || 'pingodoce';
+    const res = await fetch(API+'/api/match-review/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ retailer })
+    });
+    const result = await res.json();
+    
+    if (!res.ok) throw new Error(result.error || 'Generation failed');
+    
+    statusEl.textContent = `Generated ${result.generated || 0} suggestions (${result.totalFound || 0} found in band)`;
+    statusEl.style.color = 'green';
+    
+    await loadMatchReviewStats();
+    await loadMatchSuggestions();
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+    statusEl.style.color = 'red';
+  }
+}
+
+async function approveMatchSuggestion(id) {
+  if (!confirm('Approve this match? This will create a persistent mapping.')) return;
+  try {
+    const res = await fetch(API+`/api/match-review/suggestions/${id}/approve`, { method:'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Approve failed');
+    await loadMatchReviewStats();
+    await loadMatchSuggestions();
+  } catch (e) {
+    alert('Error: '+e.message);
+  }
+}
+
+async function rejectMatchSuggestion(id) {
+  if (!confirm('Reject this suggestion?')) return;
+  try {
+    const res = await fetch(API+`/api/match-review/suggestions/${id}/reject`, { method:'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Reject failed');
+    await loadMatchReviewStats();
+    await loadMatchSuggestions();
+  } catch (e) {
+    alert('Error: '+e.message);
+  }
+}
+
+async function fixMatchSuggestion(id) {
+  // Show a prompt to search for a different product
+  const query = prompt('Search for correct product (name, brand, or EAN):');
+  if (!query || query.length < 2) return;
+  
+  try {
+    const res = await fetch(API+`/api/match-review/products/search?q=${encodeURIComponent(query)}&limit=10`);
+    const products = await res.json();
+    
+    if (!Array.isArray(products) || products.length === 0) {
+      alert('No products found matching: ' + query);
+      return;
+    }
+    
+    // Show a simple selection prompt
+    const options = products.map((p, i) => `${i+1}. ${p.name} (${p.brand || 'no brand'}) - ${p.ean || 'no EAN'}`).join('\n');
+    const selection = prompt(`Select product number to map:\n${options}\n\nEnter number (or 0 to cancel):`);
+    
+    const idx = parseInt(selection, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= products.length) return;
+    
+    const selectedProduct = products[idx];
+    const confirmMsg = `Map to: ${selectedProduct.name} (${selectedProduct.brand || 'no brand'})?`;
+    if (!confirm(confirmMsg)) return;
+    
+    // Approve with override
+    const res2 = await fetch(API+`/api/match-review/suggestions/${id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId: selectedProduct.id })
+    });
+    const data2 = await res2.json();
+    if (!res2.ok) throw new Error(data2.error || 'Approve failed');
+    
+    await loadMatchReviewStats();
+    await loadMatchSuggestions();
   } catch (e) {
     alert('Error: '+e.message);
   }
