@@ -73,7 +73,7 @@ function parseCategoryFromUrl(url) {
 async function discoverCategories() {
   const browser = await fetchPage(BASE_URL + '/', { waitUntil: 'domcontentloaded' });
   
-  const categories = await browser.evaluate(() => {
+  const categories = await browser.evaluate((CATEGORY_MAP) => {
     const results = [];
     
     // Try to find main navigation categories
@@ -115,7 +115,7 @@ async function discoverCategories() {
     }
     
     return results;
-  });
+  }, CATEGORY_MAP);
 
   await browser.close();
   
