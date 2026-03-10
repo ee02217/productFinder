@@ -104,20 +104,15 @@ async function generateSingleSuggestion(retailer, unmatchedRow) {
   for (const candidate of candidates) {
     const nameSimilarity = similarity(sourceName, candidate.name);
     // Brand similarity - unmatchedRow doesn't have brand, so use 0
-    const brandSimilarity = 0;
-    
-    // Combined score with weighting (just name since we don't have brand in unmatched)
-    const combinedScore = (nameSimilarity * 0.7) + (brandSimilarity * 0.3);
-    
-    // No quantity info available in unmatched row
-    const finalScore = combinedScore;
+    // Use full nameSimilarity since we don't have brand info in unmatched rows
+    // The original matchConfidence was already calculated with proper weighting
+    const finalScore = nameSimilarity;
     
     if (finalScore > bestScore && finalScore >= CONFIG.MIN_CONFIDENCE && finalScore < CONFIG.MAX_CONFIDENCE) {
       bestScore = finalScore;
       bestMatch = candidate;
       bestSignals = {
         nameSimilarity,
-        brandSimilarity,
         finalScore,
       };
     }
