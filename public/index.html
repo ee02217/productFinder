@@ -220,76 +220,36 @@
       <!-- Continente Sub-tab -->
       <div id="scrape-sub-continente" class="sub-tab-content active">
       
-      <!-- Scrape Queue Controls -->
+      <!-- Continente Retailer Jobs (Auchan/Lidl style) -->
       <div class="card">
-        <h2>🚀 Scrape Products</h2>
-        
-        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start;">
-          <div class="form-group" style="flex:1;min-width:250px;">
-            <label style="font-weight:600;margin-bottom:0.5rem;display:block;">Select Categories</label>
-            <div id="scrapeCategoryList" style="max-height:280px;overflow-y:auto;border:1px solid #ddd;padding:0.5rem;border-radius:4px;">Loading categories...</div>
+        <h2>🛒 Continente Retailer Jobs</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Limit (default 500)</label>
+            <input type="number" id="continenteLimit" value="500" min="0" style="width:120px;">
           </div>
-          
-          <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:0.75rem;min-width:200px;">
-            <div class="form-group">
-              <label style="font-weight:600;">Limit (0 = all)</label>
-              <input type="number" id="scrapeLimit" value="0" min="0" style="width:120px;">
-            </div>
-            <div style="display:flex;gap:0.5rem;">
-              <button class="btn btn-primary" id="startBtn" onclick="startScraping()">Start</button>
-              <button class="btn btn-danger" id="stopBtn" onclick="stopScraping()" disabled>Stop</button>
-            </div>
+          <div class="form-group">
+            <label>Delay (ms)</label>
+            <input type="number" id="continenteDelay" value="400" min="0" style="width:120px;">
           </div>
+          <div class="form-group">
+            <label>Dry run</label>
+            <input type="checkbox" id="continenteDryRun">
+          </div>
+          <button class="btn btn-primary" onclick="startContinenteScrape()">Start Continente</button>
+          <button class="btn btn-danger" onclick="stopContinenteScrape()">Stop Continente</button>
+          <button class="btn btn-secondary" onclick="loadContinenteJobs()">Refresh</button>
         </div>
-        
-        <div class="job-status" id="jobStatus" style="display:none;margin-top:1rem;">
-          <span id="jobStatusText"></span> - Scraped: <span id="jobScraped">0</span>/<span id="jobTotal">0</span>
-        </div>
-      </div>
-
-      <!-- Scrape Queue Status -->
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-          <h3 style="margin:0;">📋 Scrape Queue</h3>
-          <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.85rem;" onclick="loadScrapeQueue()">🔄 Refresh</button>
-        </div>
+        <div id="continenteStatus" style="margin:0.5rem 0;color:#666;">Loading...</div>
         <div class="table-scroll-wrapper">
-          <table class="products-table scrape-tab-table">
-            <thead><tr><th>Category</th><th>Limit</th><th>Status</th><th>Scraped</th><th>Errors</th><th></th></tr></thead>
-            <tbody id="scrapeResultsBody"><tr><td colspan="6">Select categories and click Start</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>🚫 Blocked Root Categories</h2>
-        <p style="color:#666;margin-top:-0.25rem;">Root categories excluded at runtime from scrape queue. The queue uses DB categories, but blocked roots are filtered out before processing.</p>
-        
-        <!-- Summary chips -->
-        <div class="form-row" style="margin-bottom:1rem;">
-          <span class="status-badge failed" style="padding:4px 12px;font-size:0.85rem;">🚫 <span id="blockedRootsCount">0</span> Blocked</span>
-          <span class="status-badge completed" style="padding:4px 12px;font-size:0.85rem;">✓ <span id="allowedRootsCount">0</span> Allowed</span>
-          <button class="btn btn-secondary" onclick="loadBlockedRoots()" style="margin-left:auto;">🔄 Refresh</button>
-        </div>
-        
-        <!-- Add new root slug -->
-        <div class="form-row" style="margin-bottom:1rem;padding:0.75rem;background:#f8f9fa;border-radius:6px;">
-          <div class="form-group" style="flex:1;max-width:300px;">
-            <label style="font-size:0.85rem;">Add new root slug</label>
-            <input type="text" id="newRootSlug" placeholder="e.g., электроника" style="padding:0.4rem;font-size:0.9rem;">
-          </div>
-          <button class="btn btn-primary" onclick="addBlockedRoot()" style="align-self:flex-end;">Add Block</button>
-          <span style="color:#666;font-size:0.8rem;align-self:flex-end;padding-bottom:6px;">Only lowercase letters, numbers, hyphens</span>
-        </div>
-        
-        <div class="table-scroll-wrapper">
-        <table class="products-table scrape-tab-table" style="margin-top:0.5rem;">
-          <thead><tr><th>Root Slug</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody id="blockedRootsTable"><tr><td colspan="3">Click Refresh to load</td></tr></tbody>
+        <table class="products-table scrape-tab-table">
+          <thead><tr><th>Started</th><th>Status</th><th>Processed/Total</th><th>Matched</th><th>Unmatched</th><th>Inserted</th><th>Errors</th><th></th></tr></thead>
+          <tbody id="continenteJobsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
         </table>
         </div>
       </div>
 
+      <!-- Continente Category Blocklist -->
       <div class="card">
         <h2>🧱 Continente Category Blocklist</h2>
         <p style="color:#666;margin-top:-0.25rem;margin-bottom:1rem;">Block categories to ignore in future Continente scrapes. Blocking auto-purges existing Continente products in that row.</p>
@@ -304,6 +264,27 @@
           <thead><tr><th style="width:30px;"></th><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
           <tbody id="continenteCategoriesTable"><tr><td colspan="7">Click Refresh to load categories</td></tr></tbody>
         </table>
+        </div>
+      </div>
+
+      <!-- Advanced: Category Selection (Collapsed by default) -->
+      <div class="card" style="border-left: 3px solid #ff9800;">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleAdvancedSection()">
+          <h3 style="margin:0;color:#ff9800;">⚙️ Advanced: Category Selection</h3>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.85rem;" id="advancedToggleBtn">▼ Show</button>
+        </div>
+        <div id="advancedSection" style="display:none;margin-top:1rem;">
+          <p style="color:#666;margin-bottom:1rem;">Select specific categories to scrape. Leave unselected to scrape all allowed categories.</p>
+          <div class="form-group" style="flex:1;min-width:250px;">
+            <div id="scrapeCategoryList" style="max-height:280px;overflow-y:auto;border:1px solid #ddd;padding:0.5rem;border-radius:4px;">Loading categories...</div>
+          </div>
+          <div class="form-row" style="margin-top:1rem;">
+            <button class="btn btn-primary" onclick="startScrapingWithSelection()">Start with Selected</button>
+            <button class="btn btn-secondary" onclick="startScrapingAll()">Start All (No Filter)</button>
+          </div>
+          <div class="job-status" id="jobStatus" style="display:none;margin-top:1rem;">
+            <span id="jobStatusText"></span> - Scraped: <span id="jobScraped">0</span>/<span id="jobTotal">0</span>
+          </div>
         </div>
       </div>
       </div><!-- End Continente sub-tab -->
@@ -839,9 +820,8 @@ function showScrapeSubTab(tabId) {
   // Lazy-load data when sub-tab is opened
   if (tabId === 'continente') {
     loadScrapeOptions();
-    loadScrapeQueue();
+    loadContinenteJobs();
     loadContinenteCategoriesTab();
-    loadBlockedRoots();
   } else if (tabId === 'auchan') {
     loadAuchanJobs();
     loadAuchanCategoriesTab();
@@ -1956,6 +1936,157 @@ async function deleteContinenteCategoryProducts(categoryEnc, subEnc) {
   }
 }
 
+// ============== CONTINENTE SCRAPER FUNCTIONS (Auchan/Lidl style) ==============
+async function startContinenteScrape() {
+  const limit = parseInt(document.getElementById('continenteLimit').value || '500', 10);
+  const delayMs = parseInt(document.getElementById('continenteDelay').value || '400', 10);
+  const dryRun = !!document.getElementById('continenteDryRun').checked;
+  
+  // Check for selected categories in advanced section
+  const checkboxes = document.querySelectorAll('#scrapeCategoryList input[type="checkbox"]:checked');
+  const selected = Array.from(checkboxes);
+  
+  try {
+    let url = API+`/api/retailers/continente/start?limit=${limit}&delayMs=${delayMs}&dryRun=${dryRun}`;
+    let method = 'POST';
+    let body = null;
+    
+    if (selected.length > 0) {
+      // If categories selected, use the queue endpoint with selected categories
+      const categories = selected.map(c => ({ value: c.value, label: c.parentNode.textContent.trim() }));
+      const res = await fetch(API+'/api/scraper/queue', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ categories, limit })
+      });
+      const data = await res.json();
+      if (data.error) { alert(data.error); return; }
+      document.getElementById('continenteStatus').textContent = 'Started job with selected categories: ' + categories.length;
+    } else {
+      // No selection - start with all categories (default behavior)
+      const res = await fetch(API+'/api/retailers/continente/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ limit, delayMs, dryRun })
+      });
+      const data = await res.json();
+      if (!res.ok) { alert('Error: ' + (data.error || 'Failed to start')); return; }
+      document.getElementById('continenteStatus').textContent = 'Started job ' + data.jobId;
+    }
+    await loadContinenteJobs();
+  } catch (e) {
+    alert('Continente start error: ' + e.message);
+  }
+}
+
+async function stopContinenteScrape() {
+  try {
+    await fetch(API+'/api/retailers/continente/stop', { method:'POST' });
+    document.getElementById('continenteStatus').textContent = 'Stopping...';
+    setTimeout(loadContinenteJobs, 1000);
+  } catch (e) {
+    alert('Continente stop error: ' + e.message);
+  }
+}
+
+async function loadContinenteJobs() {
+  try {
+    const [statusRes, jobsRes] = await Promise.all([
+      fetch(API+'/api/retailers/continente/status'),
+      fetch(API+'/api/retailers/continente/jobs?limit=20')
+    ]);
+    const status = await statusRes.json();
+    const jobs = await jobsRes.json();
+
+    const statusEl = document.getElementById('continenteStatus');
+    if (status.running) {
+      const j = status.latestJob;
+      statusEl.textContent = `Running: ${j?.processed || 0}/${j?.totalUrls || '?'} processed, ${j?.matched || 0} matched`;
+      setTimeout(loadContinenteJobs, 3000);
+    } else {
+      const last = jobs[0];
+      statusEl.textContent = last ? `Last: ${last.status} (${last.processed}/${last.totalUrls})` : 'Idle';
+    }
+
+    const tbody = document.getElementById('continenteJobsTable');
+    if (!tbody) return;
+    tbody.innerHTML = (jobs || []).map(j => {
+      const canResume = ['failed','canceled','pending'].includes(j.status);
+      const action = canResume ? `<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.8rem" onclick="resumeContinenteJob('${j.id}')">Resume</button>` : '';
+      return `<tr><td>${new Date(j.startedAt).toLocaleString()}</td><td><span class="status-badge ${j.status}">${j.status}</span></td><td class="numeric-cell">${j.processed}/${j.totalUrls}</td><td class="numeric-cell">${j.matched}</td><td class="numeric-cell">${j.unmatched}</td><td class="numeric-cell">${j.insertedPrices}</td><td class="numeric-cell">${j.errors}</td><td>${action}</td></tr>`;
+    }).join('') || '<tr><td colspan="8">No Continente jobs yet</td></tr>';
+  } catch (e) {
+    const tbody = document.getElementById('continenteJobsTable');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8">Error loading Continente jobs</td></tr>';
+  }
+}
+
+async function resumeContinenteJob(jobId) {
+  const delayMs = parseInt(document.getElementById('continenteDelay').value || '400', 10);
+  const res = await fetch(API+`/api/retailers/continente/resume/${jobId}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ delayMs })
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Error: ' + (data.error || 'Failed to resume')); return; }
+  document.getElementById('continenteStatus').textContent = 'Resumed job ' + jobId;
+  loadContinenteJobs();
+}
+
+function toggleAdvancedSection() {
+  const section = document.getElementById('advancedSection');
+  const btn = document.getElementById('advancedToggleBtn');
+  if (section.style.display === 'none') {
+    section.style.display = 'block';
+    btn.textContent = '▲ Hide';
+    // Load categories when opening
+    loadScrapeOptions();
+  } else {
+    section.style.display = 'none';
+    btn.textContent = '▼ Show';
+  }
+}
+
+async function startScrapingWithSelection() {
+  const checkboxes = document.querySelectorAll('#scrapeCategoryList input[type="checkbox"]:checked');
+  const selected = Array.from(checkboxes);
+  if (selected.length === 0) { alert('Please select at least one category'); return; }
+  
+  const lim = parseInt(document.getElementById('continenteLimit').value || '500', 10);
+  const categories = selected.map(c => ({ value: c.value, label: c.parentNode.textContent.trim() }));
+  
+  try {
+    const res = await fetch(API+'/api/scraper/queue', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ categories, limit: lim })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('continenteStatus').textContent = 'Started job with ' + categories.length + ' selected categories';
+    await loadContinenteJobs();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function startScrapingAll() {
+  const lim = parseInt(document.getElementById('continenteLimit').value || '500', 10);
+  const delayMs = parseInt(document.getElementById('continenteDelay').value || '400', 10);
+  const dryRun = !!document.getElementById('continenteDryRun').checked;
+  
+  try {
+    const res = await fetch(API+'/api/retailers/continente/start', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ limit: lim, delayMs, dryRun })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert('Error: ' + (data.error || 'Failed to start')); return; }
+    document.getElementById('continenteStatus').textContent = 'Started job (all categories)';
+    await loadContinenteJobs();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
 // ============== LIDL SCRAPER FUNCTIONS ==============
 async function startLidlScrape() {
   const limit = parseInt(document.getElementById('lidlLimit').value || '500', 10);
@@ -2373,7 +2504,7 @@ setInterval(() => {
   }
   // Only refresh data for active sub-tab
   if (currentScrapeSubTab === 'continente') {
-    loadScrapeQueue();
+    loadContinenteJobs();
   } else if (currentScrapeSubTab === 'auchan') {
     loadAuchanJobs();
   } else if (currentScrapeSubTab === 'lidl') {
