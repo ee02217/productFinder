@@ -246,6 +246,37 @@
           </div>
         </div>
       </div>
+
+      <div class="card">
+        <h2>🚫 Blocked Root Categories</h2>
+        <p style="color:#666;margin-top:-0.25rem;">Root categories excluded at runtime from scrape queue. The queue uses DB categories, but blocked roots are filtered out before processing.</p>
+        <div class="form-row">
+          <button class="btn btn-secondary" onclick="loadBlockedRoots()">🔄 Refresh</button>
+        </div>
+        <div class="table-scroll-wrapper">
+        <table class="products-table scrape-tab-table" style="margin-top:1rem;">
+          <thead><tr><th>Blocked Slug</th><th>Status</th></tr></thead>
+          <tbody id="blockedRootsTable"><tr><td colspan="2">Click Refresh to load</td></tr></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🧱 Continente Category Blocklist</h2>
+        <p style="color:#666;margin-top:-0.25rem;">Block categories to ignore in future Continente scrapes. Blocking auto-purges existing Continente products in that row. Root categories (livros, casa-bricolage-e-jardim, brinquedos-e-jogos, desporto-roupa-e-viagem) are pre-blocked.</p>
+        <div class="form-row">
+          <button class="btn btn-secondary" onclick="loadContinenteCategoriesTab()">Refresh</button>
+          <button class="btn btn-secondary" onclick="toggleSelectAllContinenteCategories(true)">Select all visible</button>
+          <button class="btn btn-secondary" onclick="toggleSelectAllContinenteCategories(false)">Clear selection</button>
+          <button class="btn btn-danger" onclick="blockSelectedContinenteCategories()">Block Selected + Purge</button>
+        </div>
+        <div class="table-scroll-wrapper">
+        <table class="products-table scrape-tab-table" style="margin-top:1rem;">
+          <thead><tr><th></th><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th></th></tr></thead>
+          <tbody id="continenteCategoriesTable"><tr><td colspan="7">Click Refresh to load categories</td></tr></tbody>
+        </table>
+        </div>
+      </div>
       </div><!-- End Continente sub-tab -->
       
       <!-- Auchan Sub-tab -->
@@ -780,6 +811,8 @@ function showScrapeSubTab(tabId) {
   if (tabId === 'continente') {
     loadScrapeOptions();
     loadScrapeQueue();
+    loadContinenteCategoriesTab();
+    loadBlockedRoots();
   } else if (tabId === 'auchan') {
     loadAuchanJobs();
     loadAuchanCategoriesTab();
@@ -1693,6 +1726,134 @@ async function deleteAuchanCategoryProducts(categoryEnc, subEnc) {
     alert(`Deleted ${data.deletedProducts || 0} products`);
     await loadStats();
     await loadAuchanCategoriesTab();
+  } catch (e) {
+    alert('Delete error: ' + e.message);
+  }
+}
+
+// ============== CONTINENTE CATEGORY BLOCKLIST FUNCTIONS ==============
+
+// Load blocked root categories from /api/scraper/blocklist
+async function loadBlockedRoots() {
+  const tbody = document.getElementById('blockedRootsTable');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="2">Loading...</td></tr>';
+  try {
+    const res = await fetch(API + '/api/scraper/blocklist');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load blocklist');
+
+    const slugs = data.blockedCategories || [];
+    tbody.innerHTML = slugs.map(slug => `
+      <tr>
+        <td>${slug}</td>
+        <td>🚫 Blocked</td>
+      </tr>
+    `).join('') || '<tr><td colspan="2">No blocked categories</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="2">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function loadContinenteCategoriesTab() {
+  const tbody = document.getElementById('continenteCategoriesTable');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
+  try {
+    const res = await fetch(API+'/api/retailers/continente/categories');
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || 'Failed to load categories');
+
+    tbody.innerHTML = rows.map(r => {
+      const keyCategory = encodeURIComponent(r.categorySlug || '');
+      const keySub = encodeURIComponent(r.subcategorySlug || '');
+      const checked = r.blocked ? 'checked' : '';
+      const rootBadge = r.rootBlocked ? '<span style="background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:0.7rem;">ROOT</span>' : '';
+      return `<tr>
+        <td><input type="checkbox" class="continente-block-select" data-category="${keyCategory}" data-subcategory="${keySub}"></td>
+        <td>${r.category || '-'}</td>
+        <td>${r.subcategory !== '-' ? r.subcategory : '-'}</td>
+        <td>${r.productCount || 0}</td>
+        <td>${r.lastSeenAt ? new Date(r.lastSeenAt).toLocaleString() : '-'}</td>
+        <td>${r.blocked ? '✅' + (r.rootBlocked ? ' ' + rootBadge : '') : '—'}</td>
+        <td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteContinenteCategoryProducts('${keyCategory}','${keySub}')">Delete products</button></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7">No Continente categories found yet</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7">Error: ${e.message}</td></tr>`;
+  }
+}
+
+function toggleSelectAllContinenteCategories(checked) {
+  document.querySelectorAll('.continente-block-select').forEach(el => { el.checked = !!checked; });
+}
+
+async function blockSelectedContinenteCategories() {
+  const selected = Array.from(document.querySelectorAll('.continente-block-select:checked')).map(el => ({
+    category: decodeURIComponent(el.dataset.category || ''),
+    subcategory: decodeURIComponent(el.dataset.subcategory || '') || null,
+  })).filter(x => x.category);
+
+  if (!selected.length) {
+    alert('Select at least one category row.');
+    return;
+  }
+
+  if (!confirm(`Block and purge ${selected.length} selected categories?`)) return;
+
+  try {
+    const res = await fetch(API+'/api/retailers/continente/categories/block-bulk', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ items: selected, blocked: true })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Bulk block failed');
+    alert(`Blocked ${data.affected || 0}. Purged ${data.deletedProducts || 0} products (${data.deletedTempProducts || 0} temp).`);
+    await loadContinenteCategoriesTab();
+    await loadStats();
+  } catch (e) {
+    alert('Bulk block error: ' + e.message);
+  }
+}
+
+async function toggleContinenteBlock(categoryEnc, subEnc, blocked) {
+  try {
+    const category = decodeURIComponent(categoryEnc || '');
+    const subcategory = decodeURIComponent(subEnc || '');
+    const res = await fetch(API+'/api/retailers/continente/categories/block', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, subcategory: subcategory || null, blocked })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to update block');
+    if (blocked) {
+      alert(`Blocked and purged ${data.deletedProducts || 0} products (${data.deletedTempProducts || 0} temp)`);
+    }
+    await loadContinenteCategoriesTab();
+    await loadStats();
+  } catch (e) {
+    alert('Block update error: ' + e.message);
+  }
+}
+
+async function deleteContinenteCategoryProducts(categoryEnc, subEnc) {
+  const category = decodeURIComponent(categoryEnc || '');
+  const subcategory = decodeURIComponent(subEnc || '');
+  if (!confirm(`Delete Continente products for ${category}${subcategory ? ' > ' + subcategory : ''}?`)) return;
+
+  try {
+    const res = await fetch(API+'/api/retailers/continente/categories/delete-products', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ category, ...(subcategory ? { subcategory } : {}) })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Delete failed');
+    alert(`Deleted ${data.deletedProducts || 0} products`);
+    await loadStats();
+    await loadContinenteCategoriesTab();
   } catch (e) {
     alert('Delete error: ' + e.message);
   }
