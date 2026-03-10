@@ -6,9 +6,11 @@
  * 
  * To update: edit the BLOCKED_CATEGORY_SLUGS array below.
  * The slugs match the URL path segments (e.g., '/livros/' -> 'livros')
+ * 
+ * Runtime editing supported via setBlockedSlugs() function.
  */
 
-const BLOCKED_CATEGORY_SLUGS = [
+let BLOCKED_CATEGORY_SLUGS = [
   'livros',
   'casa-bricolage-e-jardim',
   'brinquedos-e-jogos',
@@ -71,10 +73,22 @@ function getBlockedSlugs() {
   return [...BLOCKED_CATEGORY_SLUGS];
 }
 
+/**
+ * Set the list of blocked category slugs (runtime editable)
+ * @param {string[]} slugs - Array of category slugs to block
+ */
+function setBlockedSlugs(slugs) {
+  if (!Array.isArray(slugs)) {
+    throw new Error('slugs must be an array');
+  }
+  BLOCKED_CATEGORY_SLUGS = slugs;
+}
+
 module.exports = {
   BLOCKED_CATEGORY_SLUGS,
   isCategoryBlocked,
   getRootCategorySlug,
   filterBlockedCategories,
   getBlockedSlugs,
+  setBlockedSlugs,
 };

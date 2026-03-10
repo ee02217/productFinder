@@ -1,7 +1,9 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const puppeteer = require('puppeteer-core');
-const { isCategoryBlocked, filterBlockedCategories, getBlockedSlugs } = require('../config/categoryBlocklist');
+const { isCategoryBlocked, filterBlockedCategories, getBlockedSlugs, setBlockedSlugs } = require('../config/categoryBlocklist');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -126,6 +128,67 @@ router.get('/blocklist', (req, res) => {
     blockedCategories: getBlockedSlugs(),
     count: getBlockedSlugs().length,
   });
+});
+
+// Update blocklist (add/remove slugs) - runtime editable
+router.post('/blocklist', (req, res) => {
+  try {
+    const { action, slug } = req.body || {};
+    
+    if (!action || !['add', 'remove', 'set'].includes(action)) {
+      return res.status(400).json({ error: 'action must be: add, remove, or set' });
+    }
+    
+    const currentSlugs = getBlockedSlugs();
+    let newSlugs;
+    
+    if (action === 'set' && Array.isArray(slug)) {
+      // Set entire list
+      newSlugs = slug.map(s => String(s).trim()).filter(s => s.length > 0);
+    } else if (action === 'add' && slug) {
+      // Add single slug
+      const slugStr = String(slug).trim();
+      if (!slugStr) {
+        return res.status(400).json({ error: 'slug is required for add action' });
+      }
+      if (currentSlugs.includes(slugStr)) {
+        return res.json({ blockedCategories: currentSlugs, message: 'Slug already blocked' });
+      }
+      newSlugs = [...currentSlugs, slugStr];
+    } else if (action === 'remove' && slug) {
+      // Remove single slug
+      const slugStr = String(slug).trim();
+      if (!slugStr) {
+        return res.status(400).json({ error: 'slug is required for remove action' });
+      }
+      newSlugs = currentSlugs.filter(s => s !== slugStr);
+    } else if (action === 'add' && !slug) {
+      return res.status(400).json({ error: 'slug is required for add action' });
+    } else if (action === 'remove' && !slug) {
+      return res.status(400).json({ error: 'slug is required for remove action' });
+    } else {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+    
+    // Validate slugs (alphanumeric and hyphens only)
+    const invalidSlugs = newSlugs.filter(s => !/^[a-z0-9-]+$/.test(s));
+    if (invalidSlugs.length > 0) {
+      return res.status(400).json({ error: `Invalid slug(s): ${invalidSlugs.join(', ')}. Use only lowercase letters, numbers, and hyphens.` });
+    }
+    
+    // Update the blocklist
+    setBlockedSlugs(newSlugs);
+    
+    res.json({
+      blockedCategories: newSlugs,
+      count: newSlugs.length,
+      action,
+      slug: slug,
+    });
+  } catch (err) {
+    console.error('Error updating blocklist:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Check if a category is blocked

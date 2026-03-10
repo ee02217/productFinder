@@ -219,60 +219,89 @@
       
       <!-- Continente Sub-tab -->
       <div id="scrape-sub-continente" class="sub-tab-content active">
+      
+      <!-- Scrape Queue Controls -->
       <div class="card">
         <h2>🚀 Scrape Products</h2>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Category (from database)</label>
-            <div id="scrapeCategoryList" style="max-height:300px;overflow-y:auto;border:1px solid #ddd;padding:0.5rem;">Loading categories...</div>
+        
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start;">
+          <div class="form-group" style="flex:1;min-width:250px;">
+            <label style="font-weight:600;margin-bottom:0.5rem;display:block;">Select Categories</label>
+            <div id="scrapeCategoryList" style="max-height:280px;overflow-y:auto;border:1px solid #ddd;padding:0.5rem;border-radius:4px;">Loading categories...</div>
           </div>
-          <div class="form-group">
-            <label>Limit (0 = all)</label>
-            <input type="number" id="scrapeLimit" value="0" min="0" style="width:100px;">
+          
+          <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:0.75rem;min-width:200px;">
+            <div class="form-group">
+              <label style="font-weight:600;">Limit (0 = all)</label>
+              <input type="number" id="scrapeLimit" value="0" min="0" style="width:120px;">
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+              <button class="btn btn-primary" id="startBtn" onclick="startScraping()">Start</button>
+              <button class="btn btn-danger" id="stopBtn" onclick="stopScraping()" disabled>Stop</button>
+            </div>
           </div>
-          <button class="btn btn-primary" id="startBtn" onclick="startScraping()">Start</button>
-          <button class="btn btn-danger" id="stopBtn" onclick="stopScraping()" disabled>Stop</button>
         </div>
-        <div class="job-status" id="jobStatus" style="display:none;">
+        
+        <div class="job-status" id="jobStatus" style="display:none;margin-top:1rem;">
           <span id="jobStatusText"></span> - Scraped: <span id="jobScraped">0</span>/<span id="jobTotal">0</span>
         </div>
-        <div id="scrapeResults" style="margin-top:1rem;">
-          <h3>Scrape Queue</h3>
-          <div class="table-scroll-wrapper">
+      </div>
+
+      <!-- Scrape Queue Status -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+          <h3 style="margin:0;">📋 Scrape Queue</h3>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.85rem;" onclick="loadScrapeQueue()">🔄 Refresh</button>
+        </div>
+        <div class="table-scroll-wrapper">
           <table class="products-table scrape-tab-table">
             <thead><tr><th>Category</th><th>Limit</th><th>Status</th><th>Scraped</th><th>Errors</th><th></th></tr></thead>
             <tbody id="scrapeResultsBody"><tr><td colspan="6">Select categories and click Start</td></tr></tbody>
           </table>
-          </div>
         </div>
       </div>
 
       <div class="card">
         <h2>🚫 Blocked Root Categories</h2>
         <p style="color:#666;margin-top:-0.25rem;">Root categories excluded at runtime from scrape queue. The queue uses DB categories, but blocked roots are filtered out before processing.</p>
-        <div class="form-row">
-          <button class="btn btn-secondary" onclick="loadBlockedRoots()">🔄 Refresh</button>
+        
+        <!-- Summary chips -->
+        <div class="form-row" style="margin-bottom:1rem;">
+          <span class="status-badge failed" style="padding:4px 12px;font-size:0.85rem;">🚫 <span id="blockedRootsCount">0</span> Blocked</span>
+          <span class="status-badge completed" style="padding:4px 12px;font-size:0.85rem;">✓ <span id="allowedRootsCount">0</span> Allowed</span>
+          <button class="btn btn-secondary" onclick="loadBlockedRoots()" style="margin-left:auto;">🔄 Refresh</button>
         </div>
+        
+        <!-- Add new root slug -->
+        <div class="form-row" style="margin-bottom:1rem;padding:0.75rem;background:#f8f9fa;border-radius:6px;">
+          <div class="form-group" style="flex:1;max-width:300px;">
+            <label style="font-size:0.85rem;">Add new root slug</label>
+            <input type="text" id="newRootSlug" placeholder="e.g., электроника" style="padding:0.4rem;font-size:0.9rem;">
+          </div>
+          <button class="btn btn-primary" onclick="addBlockedRoot()" style="align-self:flex-end;">Add Block</button>
+          <span style="color:#666;font-size:0.8rem;align-self:flex-end;padding-bottom:6px;">Only lowercase letters, numbers, hyphens</span>
+        </div>
+        
         <div class="table-scroll-wrapper">
-        <table class="products-table scrape-tab-table" style="margin-top:1rem;">
-          <thead><tr><th>Blocked Slug</th><th>Status</th></tr></thead>
-          <tbody id="blockedRootsTable"><tr><td colspan="2">Click Refresh to load</td></tr></tbody>
+        <table class="products-table scrape-tab-table" style="margin-top:0.5rem;">
+          <thead><tr><th>Root Slug</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="blockedRootsTable"><tr><td colspan="3">Click Refresh to load</td></tr></tbody>
         </table>
         </div>
       </div>
 
       <div class="card">
         <h2>🧱 Continente Category Blocklist</h2>
-        <p style="color:#666;margin-top:-0.25rem;">Block categories to ignore in future Continente scrapes. Blocking auto-purges existing Continente products in that row. Root categories (livros, casa-bricolage-e-jardim, brinquedos-e-jogos, desporto-roupa-e-viagem) are pre-blocked.</p>
+        <p style="color:#666;margin-top:-0.25rem;margin-bottom:1rem;">Block categories to ignore in future Continente scrapes. Blocking auto-purges existing Continente products in that row.</p>
         <div class="form-row">
-          <button class="btn btn-secondary" onclick="loadContinenteCategoriesTab()">Refresh</button>
+          <button class="btn btn-secondary" onclick="loadContinenteCategoriesTab()">🔄 Refresh</button>
           <button class="btn btn-secondary" onclick="toggleSelectAllContinenteCategories(true)">Select all visible</button>
           <button class="btn btn-secondary" onclick="toggleSelectAllContinenteCategories(false)">Clear selection</button>
           <button class="btn btn-danger" onclick="blockSelectedContinenteCategories()">Block Selected + Purge</button>
         </div>
         <div class="table-scroll-wrapper">
-        <table class="products-table scrape-tab-table" style="margin-top:1rem;">
-          <thead><tr><th></th><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th></th></tr></thead>
+        <table class="products-table scrape-tab-table" style="margin-top:0.5rem;">
+          <thead><tr><th style="width:30px;"></th><th>Category</th><th>Subcategory</th><th>Products</th><th>Last Seen</th><th>Blocked</th><th>Action</th></tr></thead>
           <tbody id="continenteCategoriesTable"><tr><td colspan="7">Click Refresh to load categories</td></tr></tbody>
         </table>
         </div>
@@ -1736,22 +1765,84 @@ async function deleteAuchanCategoryProducts(categoryEnc, subEnc) {
 // Load blocked root categories from /api/scraper/blocklist
 async function loadBlockedRoots() {
   const tbody = document.getElementById('blockedRootsTable');
+  const countEl = document.getElementById('blockedRootsCount');
+  const allowedEl = document.getElementById('allowedRootsCount');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="2">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
   try {
     const res = await fetch(API + '/api/scraper/blocklist');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load blocklist');
 
     const slugs = data.blockedCategories || [];
+    
+    // Update counts
+    if (countEl) countEl.textContent = slugs.length;
+    // Allowed count is estimated (total possible roots - blocked)
+    if (allowedEl) allowedEl.textContent = '∞';
+    
     tbody.innerHTML = slugs.map(slug => `
       <tr>
-        <td>${slug}</td>
-        <td>🚫 Blocked</td>
+        <td style="font-family:monospace;font-size:0.9rem;">${slug}</td>
+        <td><span class="status-badge failed">🚫 Blocked</span></td>
+        <td><button class="btn btn-secondary" style="padding:2px 8px;font-size:0.8rem;" onclick="removeBlockedRoot('${slug}')">Unblock</button></td>
       </tr>
-    `).join('') || '<tr><td colspan="2">No blocked categories</td></tr>';
+    `).join('') || '<tr><td colspan="3">No blocked root categories</td></tr>';
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="2">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3">Error: ${e.message}</td></tr>`;
+  }
+}
+
+// Add a new blocked root slug
+async function addBlockedRoot() {
+  const input = document.getElementById('newRootSlug');
+  const slug = input.value.trim();
+  
+  if (!slug) {
+    alert('Please enter a root slug');
+    return;
+  }
+  
+  // Validate slug format
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    alert('Invalid slug format. Use only lowercase letters, numbers, and hyphens.');
+    return;
+  }
+  
+  try {
+    const res = await fetch(API + '/api/scraper/blocklist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add', slug: slug })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to add slug');
+    
+    input.value = '';
+    await loadBlockedRoots();
+    alert(`Added "${slug}" to blocked roots`);
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Remove a blocked root slug
+async function removeBlockedRoot(slug) {
+  if (!confirm(`Unblock root "${slug}"?`)) return;
+  
+  try {
+    const res = await fetch(API + '/api/scraper/blocklist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'remove', slug: slug })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to remove slug');
+    
+    await loadBlockedRoots();
+    alert(`Removed "${slug}" from blocked roots`);
+  } catch (e) {
+    alert('Error: ' + e.message);
   }
 }
 
@@ -1769,6 +1860,12 @@ async function loadContinenteCategoriesTab() {
       const keySub = encodeURIComponent(r.subcategorySlug || '');
       const checked = r.blocked ? 'checked' : '';
       const rootBadge = r.rootBlocked ? '<span style="background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:0.7rem;">ROOT</span>' : '';
+      
+      // Action button - block/unblock based on current state
+      const actionBtn = r.blocked 
+        ? `<button class="btn btn-secondary" style="padding:2px 6px;font-size:0.75rem;" onclick="toggleContinenteBlock('${keyCategory}','${keySub}',false)">Unblock</button>`
+        : `<button class="btn btn-danger" style="padding:2px 6px;font-size:0.75rem;" onclick="toggleContinenteBlock('${keyCategory}','${keySub}',true)">Block</button>`;
+      
       return `<tr>
         <td><input type="checkbox" class="continente-block-select" data-category="${keyCategory}" data-subcategory="${keySub}"></td>
         <td>${r.category || '-'}</td>
@@ -1776,7 +1873,7 @@ async function loadContinenteCategoriesTab() {
         <td>${r.productCount || 0}</td>
         <td>${r.lastSeenAt ? new Date(r.lastSeenAt).toLocaleString() : '-'}</td>
         <td>${r.blocked ? '✅' + (r.rootBlocked ? ' ' + rootBadge : '') : '—'}</td>
-        <td><button class="btn btn-danger" style="padding:2px 6px;font-size:0.8rem" onclick="deleteContinenteCategoryProducts('${keyCategory}','${keySub}')">Delete products</button></td>
+        <td>${actionBtn} <button class="btn btn-secondary" style="padding:2px 6px;font-size:0.75rem;" onclick="deleteContinenteCategoryProducts('${keyCategory}','${keySub}')">🗑</button></td>
       </tr>`;
     }).join('') || '<tr><td colspan="7">No Continente categories found yet</td></tr>';
   } catch (e) {

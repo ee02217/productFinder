@@ -23,6 +23,7 @@ const categoriesRouter = require('./routes/categories');
 const retailerAuchanRouter = require('./routes/retailer-auchan');
 const retailerLidlRouter = require('./routes/retailer-lidl');
 const retailerPingoDoceRouter = require('./routes/retailer-pingodoce');
+const retailerContinenteRouter = require('./routes/retailer-continente');
 const tempProductsRouter = require('./routes/temp-products');
 const matchReviewRouter = require('./routes/matchReview');
 
@@ -34,6 +35,7 @@ app.use('/api/categories', categoriesRouter);
 app.use('/api/retailers/auchan', retailerAuchanRouter);
 app.use('/api/retailers/lidl', retailerLidlRouter);
 app.use('/api/retailers/pingodoce', retailerPingoDoceRouter);
+app.use('/api/retailers/continente', retailerContinenteRouter);
 app.use('/api/temp-products', tempProductsRouter);
 app.use('/api/match-review', matchReviewRouter);
 
