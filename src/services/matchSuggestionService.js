@@ -27,7 +27,7 @@ const prisma = new PrismaClient();
 // Configuration for suggestion generation
 const CONFIG = {
   // Mid-confidence band for suggestions
-  MIN_CONFIDENCE: 0.75,
+  MIN_CONFIDENCE: 0.60,
   MAX_CONFIDENCE: 0.92,
   // Batch size for processing
   BATCH_SIZE: 100,
