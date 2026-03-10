@@ -121,6 +121,28 @@
     .status-badge.completed { background: #d4edda; color: #155724; }
     .status-badge.failed { background: #f8d7da; color: #721c24; }
     .status-badge.canceled { background: #e2e3e5; color: #383d41; }
+    /* Sortable table headers */
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    th.sortable:hover {
+      background: #e9ecef;
+    }
+    .sort-indicator {
+      margin-left: 4px;
+      font-size: 0.8rem;
+      color: #666;
+    }
+    th.sort-asc .sort-indicator::after {
+      content: '↑';
+    }
+    th.sort-desc .sort-indicator::after {
+      content: '↓';
+    }
+    th.sorted .sort-indicator {
+      color: #4CAF50;
+    }
     /* Numeric columns right-aligned */
     .numeric-cell {
       text-align: right;
@@ -467,11 +489,11 @@
         <table class="products-table">
           <thead>
             <tr>
-              <th>Source Product</th>
-              <th>→ Suggested Match</th>
-              <th>Confidence</th>
-              <th>Status</th>
-              <th>Created</th>
+              <th class="sortable" data-sort="sourceName" onclick="sortMatchSuggestions('sourceName')">Source Product <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="suggestedName" onclick="sortMatchSuggestions('suggestedName')">→ Suggested Match <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="confidence" onclick="sortMatchSuggestions('confidence')">Confidence <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="status" onclick="sortMatchSuggestions('status')">Status <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="createdAt" onclick="sortMatchSuggestions('createdAt')">Created <span class="sort-indicator"></span></th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -590,6 +612,91 @@
 <script>
 const API = '';
 let currentPage = 1, totalPages = 1, scraperStatus = null, currentProductId = null;
+
+// Match Review sorting state
+let matchSuggestionsData = [];
+let currentSort = { column: 'createdAt', direction: 'desc' };
+
+// Match Review sorting function
+function sortMatchSuggestions(column) {
+  // Toggle direction if same column, otherwise default to desc for new column
+  if (currentSort.column === column) {
+    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    // Default direction: desc for confidence, asc for others
+    currentSort.column = column;
+    currentSort.direction = column === 'confidence' ? 'desc' : 'asc';
+  }
+  
+  // Update header indicators
+  document.querySelectorAll('#tab-match-review th.sortable').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc', 'sorted');
+    if (th.dataset.sort === currentSort.column) {
+      th.classList.add('sorted', currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  });
+  
+  // Render sorted data
+  renderMatchSuggestions(matchSuggestionsData);
+}
+
+function renderMatchSuggestions(rows) {
+  const tbody = document.getElementById('matchSuggestionsTable');
+  if (!tbody) return;
+  
+  if (!Array.isArray(rows) || rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6">No pending suggestions. Click "Generate Suggestions" to create matches.</td></tr>';
+    return;
+  }
+  
+  // Sort the data
+  const sortedRows = [...rows].sort((a, b) => {
+    let aVal, bVal;
+    
+    switch (currentSort.column) {
+      case 'sourceName':
+        aVal = (a.sourceName || '').toLowerCase();
+        bVal = (b.sourceName || '').toLowerCase();
+        break;
+      case 'suggestedName':
+        aVal = ((a.suggestedProduct?.name) || '').toLowerCase();
+        bVal = ((b.suggestedProduct?.name) || '').toLowerCase();
+        break;
+      case 'confidence':
+        aVal = a.confidence || 0;
+        bVal = b.confidence || 0;
+        break;
+      case 'status':
+        aVal = a.status || '';
+        bVal = b.status || '';
+        break;
+      case 'createdAt':
+      default:
+        aVal = new Date(a.createdAt).getTime();
+        bVal = new Date(b.createdAt).getTime();
+        break;
+    }
+    
+    if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1;
+    if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+  
+  tbody.innerHTML = sortedRows.map(r => {
+    const sourceName = r.sourceName || '-';
+    const suggestedName = r.suggestedProduct?.name || '-';
+    const suggestedBrand = r.suggestedProduct?.brand || '';
+    const confidence = r.confidence ? (r.confidence * 100).toFixed(1) + '%' : '-';
+    const signals = r.signals ? 
+      `<span style="color:#666;font-size:0.85rem;">name: ${((r.signals.nameSimilarity||0)*100).toFixed(0)}%</span>` : '';
+    const actions = r.status === 'pending'
+      ? `<button class="btn btn-primary" style="padding:2px 8px;font-size:0.8rem;margin-right:4px" onclick="approveMatchSuggestion('${r.id}')">✓ Approve</button>` +
+        `<button class="btn btn-secondary" style="padding:2px 8px;font-size:0.8rem;margin-right:4px" onclick="fixMatchSuggestion('${r.id}')">✎ Fix</button>` +
+        `<button class="btn btn-danger" style="padding:2px 8px;font-size:0.8rem" onclick="rejectMatchSuggestion('${r.id}')">✕ Reject</button>`
+      : r.status;
+    return `<tr class="match-suggestion-row" data-suggestion-id="${r.id}" onclick="showMatchDetails('${r.id}')"><td>${sourceName}</td><td>${suggestedName}${suggestedBrand ? '<br><small>' + suggestedBrand + '</small>' : ''}</td><td>${confidence}<br>${signals}</td><td><span class="status-badge ${r.status}">${r.status}</span></td><td>${new Date(r.createdAt).toLocaleString()}</td><td onclick="event.stopPropagation();">${actions}</td></tr>`;
+  }).join('');
+}
 
 function showTab(tabId) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -924,23 +1031,23 @@ async function loadMatchSuggestions() {
     
     if (!Array.isArray(rows) || rows.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6">No pending suggestions. Click "Generate Suggestions" to create matches.</td></tr>';
+      matchSuggestionsData = [];
       return;
     }
     
-    tbody.innerHTML = rows.map(r => {
-      const sourceName = r.sourceName || '-';
-      const suggestedName = r.suggestedProduct?.name || '-';
-      const suggestedBrand = r.suggestedProduct?.brand || '';
-      const confidence = r.confidence ? (r.confidence * 100).toFixed(1) + '%' : '-';
-      const signals = r.signals ? 
-        `<span style="color:#666;font-size:0.85rem;">name: ${((r.signals.nameSimilarity||0)*100).toFixed(0)}%</span>` : '';
-      const actions = r.status === 'pending'
-        ? `<button class="btn btn-primary" style="padding:2px 8px;font-size:0.8rem;margin-right:4px" onclick="approveMatchSuggestion('${r.id}')">✓ Approve</button>` +
-          `<button class="btn btn-secondary" style="padding:2px 8px;font-size:0.8rem;margin-right:4px" onclick="fixMatchSuggestion('${r.id}')">✎ Fix</button>` +
-          `<button class="btn btn-danger" style="padding:2px 8px;font-size:0.8rem" onclick="rejectMatchSuggestion('${r.id}')">✕ Reject</button>`
-        : r.status;
-      return `<tr class="match-suggestion-row" data-suggestion-id="${r.id}" onclick="showMatchDetails('${r.id}')"><td>${sourceName}</td><td>${suggestedName}${suggestedBrand ? '<br><small>' + suggestedBrand + '</small>' : ''}</td><td>${confidence}<br>${signals}</td><td><span class="status-badge ${r.status}">${r.status}</span></td><td>${new Date(r.createdAt).toLocaleString()}</td><td onclick="event.stopPropagation();">${actions}</td></tr>`;
-    }).join('');
+    // Store data globally for sorting
+    matchSuggestionsData = rows;
+    
+    // Initialize sort indicator on first load (default: createdAt desc)
+    document.querySelectorAll('#tab-match-review th.sortable').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc', 'sorted');
+      if (th.dataset.sort === currentSort.column) {
+        th.classList.add('sorted', currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+      }
+    });
+    
+    // Render with current sort
+    renderMatchSuggestions(rows);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6">Error: ${e.message}</td></tr>`;
   }
