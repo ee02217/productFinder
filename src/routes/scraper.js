@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const puppeteer = require('puppeteer-core');
+const { isCategoryBlocked, filterBlockedCategories, getBlockedSlugs } = require('../config/categoryBlocklist');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -119,6 +120,25 @@ router.get('/status', (req, res) => {
   });
 });
 
+// Get blocklist info
+router.get('/blocklist', (req, res) => {
+  res.json({
+    blockedCategories: getBlockedSlugs(),
+    count: getBlockedSlugs().length,
+  });
+});
+
+// Check if a category is blocked
+router.get('/blocklist/check/:categoryPath(*)', (req, res) => {
+  const { categoryPath } = req.params;
+  const blocked = isCategoryBlocked(categoryPath);
+  res.json({
+    category: categoryPath,
+    blocked,
+    rootSlug: categoryPath ? categoryPath.split('/')[0] : null,
+  });
+});
+
 // Get queue (all jobs)
 router.get('/queue', async (req, res) => {
   try {
@@ -144,9 +164,17 @@ router.post('/queue', async (req, res) => {
     const settings = await prisma.settings.findUnique({ where: { id: 'default' } });
     const delayMs = settings?.delayMs || 2000;
 
-    // Create pending jobs for each category
+    // Filter out blocked categories (primary guard)
+    const allowedCategories = filterBlockedCategories(categories);
+    const blockedCount = categories.length - allowedCategories.length;
+    
+    if (blockedCount > 0) {
+      console.log(`[BLOCKLIST] Filtered ${blockedCount} blocked categories: ${getBlockedSlugs().join(', ')}`);
+    }
+
+    // Create pending jobs for each allowed category
     const jobs = [];
-    for (const cat of categories) {
+    for (const cat of allowedCategories) {
       const job = await prisma.scrapeJob.create({
         data: {
           category: cat.value,
@@ -294,6 +322,15 @@ router.post('/product', async (req, res) => {
     return res.status(400).json({ error: 'Invalid url (must start with https://www.continente.pt/produto/)' });
   }
 
+  // Blocklist check for categoryPath
+  if (categoryPath && isCategoryBlocked(categoryPath)) {
+    return res.status(400).json({ 
+      error: 'Category is blocked',
+      blockedCategory: categoryPath,
+      allowedCategories: getBlockedSlugs()
+    });
+  }
+
   const browser = await puppeteer.launch({
     executablePath: CHROME_PATH,
     headless: true,
@@ -418,6 +455,15 @@ router.post('/start', async (req, res) => {
   
   if (!cat || !cat.name) {
     return res.status(400).json({ error: 'Invalid category' });
+  }
+
+  // Blocklist check (primary guard)
+  if (isCategoryBlocked(cat.name)) {
+    return res.status(400).json({ 
+      error: 'Category is blocked',
+      blockedCategory: cat.name,
+      allowedCategories: getBlockedSlugs()
+    });
   }
 
   // Create job
@@ -944,6 +990,13 @@ async function scrapeCategory(category, limit, delayMs, opts = {}) {
 
 
           if (data.ean && data.name) {
+            // Defense in depth: Check if category is blocked before persisting
+            if (isCategoryBlocked(category.name)) {
+              console.log(`[BLOCKLIST] Skipping blocked category: ${category.name}`);
+              scraped++; // Count as scraped but skip writing
+              return;
+            }
+
             // Upsert product
             const product = await prisma.product.upsert({
               where: { ean: data.ean },
