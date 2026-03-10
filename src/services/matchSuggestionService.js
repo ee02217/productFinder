@@ -6,11 +6,20 @@
  * 
  * Key features:
  * - Brand-aware scoring (prevents cross-brand suggestions)
+ * - Hybrid similarity (token overlap + Levenshtein)
+ * - Brand-aware name normalization to avoid double-counting brand
  * - Enriches source rows with brand/unit from TempProduct
  * - Hard brand guard to penalize mismatched brands
  */
 
 const { PrismaClient } = require('@prisma/client');
+const {
+  normalizeForComparison,
+  hybridSimilarity,
+  levenshteinSimilarity,
+  brandAwareNameNormalization,
+  isQuantityCompatible,
+} = require('../utils/nameNormalization');
 
 const prisma = new PrismaClient();
 
@@ -32,72 +41,25 @@ const CONFIG = {
 };
 
 /**
- * Normalize a string for comparison (same as matcher's normalizeForComparison)
+ * Calculate name similarity using hybrid approach with brand-aware normalization.
+ * If both source and candidate have brands, strips brand tokens from names
+ * before computing similarity to avoid double-counting brand.
  */
-function normalizeForComparison(str) {
-  if (!str) return '';
-  return String(str)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
-    .replace(/[^a-z0-9\s]/g, '')      // Remove special chars
-    .replace(/\s+/g, ' ')             // Normalize whitespace
-    .trim();
-}
-
-/**
- * Calculate Levenshtein-based similarity (same as matcher's similarity)
- */
-function similarity(a, b) {
-  if (!a || !b) return 0;
-  const normA = normalizeForComparison(a);
-  const normB = normalizeForComparison(b);
+function similarity(sourceName, candidateName, sourceBrand = null, candidateBrand = null) {
+  if (!sourceName || !candidateName) return 0;
   
-  if (normA === normB) return 1;
-  if (normA.length === 0 || normB.length === 0) return 0;
-
-  // Simple Levenshtein-based similarity
-  const longer = normA.length > normB.length ? normA : normB;
-  const shorter = normA.length > normB.length ? normB : normA;
+  // Use brand-aware name normalization
+  const { sourceNormalized, candidateNormalized, brandsStripped } = brandAwareNameNormalization(
+    sourceName, candidateName, sourceBrand, candidateBrand
+  );
   
-  const editDistance = levenshtein(longer, shorter);
-  return (longer.length - editDistance) / longer.length;
-}
-
-function levenshtein(a, b) {
-  const matrix = [];
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
-  }
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-  return matrix[b.length][a.length];
-}
-
-/**
- * Check if quantity values are compatible
- */
-function isQuantityCompatible(q1, q2) {
-  if (!q1 || !q2) return null;
-  if (q1.unitType !== q2.unitType) return false;
+  // If brands were stripped, use the normalized names for comparison
+  // This avoids double-counting brand in name similarity
+  const nameA = brandsStripped ? sourceNormalized : normalizeForComparison(sourceName);
+  const nameB = brandsStripped ? candidateNormalized : normalizeForComparison(candidateName);
   
-  // Allow 5% variance
-  const ratio = q1.unitCount / q2.unitCount;
-  return ratio >= 0.95 && ratio <= 1.05;
+  // Use hybrid similarity (token overlap + character similarity)
+  return hybridSimilarity(nameA, nameB);
 }
 
 /**
@@ -240,15 +202,15 @@ async function generateSingleSuggestion(retailer, unmatchedRow) {
   let bestSignals = null;
   
   for (const candidate of candidates) {
-    // Calculate name similarity
-    const nameSimilarity = similarity(sourceName, candidate.name);
+    // Calculate name similarity with brand-aware normalization
+    const nameSimilarity = similarity(sourceName, candidate.name, sourceBrand, candidate.brand);
     
-    // Calculate brand similarity (if both have brand info)
+    // Calculate brand similarity (if both have brand info) using Levenshtein
     let brandSimilarity = 0;
     let brandMismatch = false;
     
     if (sourceBrand && candidate.brand) {
-      brandSimilarity = similarity(sourceBrand, candidate.brand);
+      brandSimilarity = levenshteinSimilarity(sourceBrand, candidate.brand);
       
       // Hard brand guard: if normalized brands differ significantly, apply penalty
       const normSourceBrand = normalizeForComparison(sourceBrand);
@@ -604,7 +566,12 @@ module.exports = {
   // Export helper functions for testing and external use
   normalizeForComparison,
   similarity,
-  levenshtein,
+  hybridSimilarity,
+  levenshteinSimilarity,
   isQuantityCompatible,
   enrichWithTempProduct,
+  brandAwareNameNormalization,
+  // Also export tokenization for testing
+  tokenize: require('../utils/nameNormalization').tokenize,
+  tokenOverlapSimilarity: require('../utils/nameNormalization').tokenOverlapSimilarity,
 };
